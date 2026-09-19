@@ -1,0 +1,366 @@
+@import "tailwindcss";
+
+/*
+ * Palette
+ *   white / black — base background and text
+ *   ocean  — learning / progression UI
+ *   earth  — culture / heritage / community UI
+ *   forest — success, correct answers, progress
+ *   red    — errors, wrong answers, destructive actions
+ *   gold   — streaks, XP, achievements only (small accent, docs/spec.md §2.3)
+ *
+ * --accent follows the section: ocean by default, earth inside
+ * [data-section="culture"]. Build section UI with "accent", not a fixed colour.
+ */
+:root {
+  --ocean: #1b6ca8;
+  --ocean-dark: #0d3b54;
+  --earth: #a8552e;
+  --gold: #e0a93a;
+  --forest: #1e6b3a;
+  --red: #c0392b;
+  --background: #ffffff;
+  --surface: #fafafa;
+  --foreground: #111111;
+  --muted: #555555;
+  --border: #e4e4e4;
+  --accent: var(--ocean);
+  color-scheme: light;
+  /* Filled buttons and panels with white text: same in light and dark. */
+  --accent-solid: #1b6ca8;
+}
+
+/* White is the default. Dark is opt-in via <html data-theme="dark">,
+   not tied to the OS setting. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ocean: #5aa3d9;
+  --earth: #d17f57;
+  --gold: #e9b95a;
+  --forest: #5fb37c;
+  --red: #ef6a5b;
+  --background: #0d3b54;
+  --surface: #124864;
+  --foreground: #f3ede4;
+  --muted: #b5c4cf;
+  --border: #1f5a78;
+}
+
+[data-section="culture"] {
+  --accent: var(--earth);
+  --accent-solid: #a8552e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ocean: var(--ocean);
+  --color-ocean-dark: var(--ocean-dark);
+  --color-earth: var(--earth);
+  --color-gold: var(--gold);
+  --color-forest: var(--forest);
+  --color-red: var(--red);
+  --color-accent: var(--accent);
+  --color-accent-solid: var(--accent-solid);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --animate-pop: pop 250ms ease-out both;
+  --animate-flash: flash 150ms ease-out both;
+  --animate-step-in: step-in 250ms ease-out both;
+  --animate-sheet-in: sheet-in 250ms ease-out both;
+  --animate-fade-in: fade-in 200ms ease-out both;
+  --animate-popup-in: popup-in 250ms ease-out both;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* ── Motion (docs/spec.md §2.6): 150–300ms, ease-out, no bounce ── */
+
+@keyframes pop {
+  from { transform: scale(0.85); opacity: 0.6; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes flash {
+  from { background-color: color-mix(in srgb, var(--forest) 45%, transparent); }
+}
+@keyframes step-in {
+  from { transform: translateX(24px); opacity: 0; }
+}
+@keyframes sheet-in {
+  from { transform: translateX(100%); }
+}
+@keyframes popup-in {
+  from { transform: translateY(24px); opacity: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+/* Screen transitions: every route change runs through <ScreenTransition>. */
+
+@keyframes screen-out {
+  to { opacity: 0; }
+}
+@keyframes screen-in {
+  from { opacity: 0; transform: translateX(var(--screen-offset, 0)) translateY(var(--screen-rise, 12px)); }
+}
+
+::view-transition-old(.screen),
+::view-transition-old(.screen-back) {
+  animation: 120ms ease-out both screen-out;
+}
+::view-transition-new(.screen) {
+  animation: 220ms ease-out 80ms both screen-in;
+}
+::view-transition-new(.screen-back) {
+  --screen-offset: -24px;
+  --screen-rise: 0px;
+  animation: 220ms ease-out 80ms both screen-in;
+}
+
+/* The shell stays put while screens move underneath it. */
+::view-transition-group(app-header),
+::view-transition-group(app-tabbar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(app-header),
+::view-transition-old(app-tabbar) {
+  display: none;
+}
+::view-transition-new(app-header),
+::view-transition-new(app-tabbar) {
+  animation: none;
+}
+::view-transition {
+  pointer-events: none;
+}
+
+/* Browsers without the View Transitions API still get an enter animation. */
+@supports not (view-transition-name: none) {
+  .screen {
+    animation: 250ms ease-out both screen-in;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
+
+/* ── Glass surfaces ────────────────────────────────────────────────
+ *
+ * Panels are translucent so the page's own colour shows through them.
+ * The tokens carry the whole look, so a surface changes in one place:
+ *
+ *   .glass         standard panel — cards, forms, result blocks
+ *   .glass-strong  panels that sit over artwork and must stay readable
+ *   .glass-inset   inputs and controls inside a .glass panel
+ *   .glass-rail    the sidebar and mobile tab bar
+ *
+ * backdrop-filter is progressive: browsers without it fall back to the
+ * flat --glass-solid colour, which is opaque, so text contrast holds.
+ */
+:root {
+  --glass-blur: 18px;
+  --glass-bg: rgb(255 255 255 / 0.62);
+  --glass-solid: #fbfbfc;
+  --glass-border: rgb(255 255 255 / 0.75);
+  --glass-edge: rgb(17 17 17 / 0.07);
+  --glass-shadow: 0 1px 2px rgb(17 17 17 / 0.04), 0 12px 32px -12px rgb(17 17 17 / 0.16);
+  --glass-inset-bg: rgb(255 255 255 / 0.55);
+  /* Accent text sitting ON a glass panel. Split from --accent because the
+     panel tint eats contrast in dark mode and the plain accent drops to
+     3.2:1 there — below AA for the small labels on the voice controls. */
+  --accent-on-glass: var(--accent);
+
+  /* Rounding scale. Panels are softer than the Tailwind default. */
+  --radius-panel: 1.5rem;
+  --radius-control: 0.875rem;
+}
+
+:root[data-theme="dark"] {
+  --glass-bg: rgb(18 72 100 / 0.55);
+  --glass-solid: #124864;
+  --glass-border: rgb(255 255 255 / 0.14);
+  --glass-edge: rgb(255 255 255 / 0.12);
+  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 12px 32px -12px rgb(0 0 0 / 0.5);
+  --glass-inset-bg: rgb(255 255 255 / 0.07);
+  /* Lightened ocean: 4.9:1 on the dark inset panel, vs 3.2:1 for --ocean. */
+  --accent-on-glass: #8fc8ef;
+}
+
+/* Lightened earth for the culture section, 5.0:1 on the same panel. */
+:root[data-theme="dark"] [data-section="culture"] {
+  --accent-on-glass: #f0b894;
+}
+
+.glass,
+.glass-strong,
+.glass-rail {
+  background-color: var(--glass-solid);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-panel);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .glass,
+  .glass-strong,
+  .glass-rail {
+    background-color: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  }
+  .glass-strong {
+    --glass-bg: rgb(255 255 255 / 0.82);
+    --glass-blur: 28px;
+  }
+  :root[data-theme="dark"] .glass-strong {
+    --glass-bg: rgb(13 59 84 / 0.82);
+  }
+}
+
+/* The hairline highlight along the top edge is what reads as "glass"
+   rather than "transparent box". */
+.glass,
+.glass-strong {
+  position: relative;
+}
+.glass::before,
+.glass-strong::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-top: 1px solid var(--glass-border);
+  pointer-events: none;
+}
+
+.glass-inset {
+  background-color: var(--glass-inset-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-control);
+}
+
+/* Sidebar and tab bar: same treatment, squared off where they meet the edge. */
+.glass-rail {
+  border-radius: 0;
+}
+
+/* A soft accent wash behind everything, so translucent panels have
+   something to be translucent against. Stays white-dominant. */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -20;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
+    radial-gradient(48rem 34rem at 92% 8%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 70%),
+    radial-gradient(52rem 38rem at 50% 108%, color-mix(in srgb, var(--forest) 9%, transparent), transparent 70%),
+    var(--background);
+}
+
+/* Focus rings sized to the new radii. */
+.glass :where(input, select, textarea):focus-visible,
+.glass-strong :where(input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── Motion polish ────────────────────────────────────────────────
+ *
+ * One easing curve for everything that moves, and one press response.
+ * Still inside the spec's 150–300ms ease-out envelope with no bounce:
+ * the curve decelerates hard and settles, it never overshoots.
+ */
+:root {
+  --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+*,
+*::before,
+*::after {
+  transition-timing-function: var(--ease-out-soft);
+}
+
+/* Tactile press: the control gives a little under the finger and springs
+   back on release. Pointer-only, so it never fires on keyboard focus. */
+.press {
+  transition:
+    transform 200ms var(--ease-out-soft),
+    opacity 200ms var(--ease-out-soft),
+    color 200ms var(--ease-out-soft),
+    background-color 200ms var(--ease-out-soft),
+    border-color 200ms var(--ease-out-soft);
+  will-change: transform;
+}
+@media (hover: hover) {
+  .press:hover {
+    transform: translateY(-1px);
+  }
+}
+.press:active {
+  transform: scale(0.96);
+  transition-duration: 100ms;
+}
+
+/* Panels lift slightly on hover where they are also links. */
+a.glass:hover,
+button.glass:hover {
+  box-shadow: 0 2px 4px rgb(17 17 17 / 0.05), 0 18px 40px -14px rgb(17 17 17 / 0.22);
+  transform: translateY(-2px);
+}
+a.glass,
+button.glass {
+  transition:
+    transform 250ms var(--ease-out-soft),
+    box-shadow 250ms var(--ease-out-soft),
+    border-color 250ms var(--ease-out-soft);
+}
+
+/* Light ⇄ dark: cross-fade the whole page instead of snapping. Driven by
+   startViewTransition in components/shell/ThemeToggle. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--ease-out-soft);
+  mix-blend-mode: normal;
+}
+
+/* Colour tokens themselves ease, so anything the toggle misses still glides. */
+body,
+.glass,
+.glass-strong,
+.glass-rail,
+.glass-inset {
+  transition:
+    background-color 280ms var(--ease-out-soft),
+    border-color 280ms var(--ease-out-soft),
+    color 280ms var(--ease-out-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press:hover,
+  .press:active,
+  a.glass:hover,
+  button.glass:hover {
+    transform: none;
+  }
+}
