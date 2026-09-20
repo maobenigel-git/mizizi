@@ -17,11 +17,24 @@ export function WordOfDayBody({ word, languageName, saved }: { word: Word; langu
         </div>
         <PronunciationButton term={word.term} audioUrl={word.audioUrl} phonetic={word.phonetic} />
       </div>
-      <blockquote className="border-l-2 border-accent pl-3 text-sm">
-        <p>{word.example}</p>
-        <p className="text-muted">{word.exampleMeaning}</p>
-      </blockquote>
+      {/* Words sourced from a dictionary have no cited example sentence, and we
+          would rather show none than write one. */}
+      {word.example && word.exampleMeaning && (
+        <blockquote className="border-l-2 border-accent pl-3 text-sm">
+          <p>{word.example}</p>
+          <p className="text-muted">{word.exampleMeaning}</p>
+        </blockquote>
+      )}
       {word.note && <p className="text-sm text-muted">{word.note}</p>}
+      {word.source && (
+        <p className="text-xs text-muted">
+          From{" "}
+          <a href={word.source.url} target="_blank" rel="noreferrer noopener" className="font-medium text-accent hover:underline">
+            {word.source.title}
+          </a>{" "}
+          ({word.source.license})
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <form action={toggleNotebook.bind(null, word.id, "word_of_day")}>
           <button

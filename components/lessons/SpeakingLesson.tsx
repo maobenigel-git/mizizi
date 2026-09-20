@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { CharacterImage } from "@/components/assets/CharacterImage";
+import { LessonNotes } from "@/components/lessons/LessonNotes";
 import { FlameIcon } from "@/components/shell/StreakFlame";
 import { SpeakButton } from "@/components/voice/SpeakButton";
 import { VoiceInput } from "@/components/voice/VoiceInput";
@@ -28,11 +29,13 @@ export function SpeakingLesson({
   lesson,
   languageName,
   character,
+  noteCount,
   complete,
 }: {
   lesson: Lesson;
   languageName: string;
   character?: string;
+  noteCount: number;
   complete: () => Promise<LessonResult>;
 }) {
   const router = useRouter();
@@ -130,6 +133,9 @@ export function SpeakingLesson({
             ) : (
               <span className="text-xs text-muted">No {languageName} voice available — read it yourself.</span>
             )}
+            {phrase.origin === "wiktionary" && (
+              <span className="rounded-full bg-[var(--glass-inset-bg)] px-2.5 py-0.5 text-xs text-muted">From Wiktionary</span>
+            )}
             {phrase.origin === "google" && (
               <span className="rounded-full bg-[var(--glass-inset-bg)] px-2.5 py-0.5 text-xs text-muted">Machine translation</span>
             )}
@@ -188,6 +194,9 @@ export function SpeakingLesson({
           </div>
         )}
       </div>
+
+      {/* Context is the phrase itself, which is what makes the note legible later. */}
+      <LessonNotes context={phrase.text} count={noteCount} />
 
       <button
         type="button"

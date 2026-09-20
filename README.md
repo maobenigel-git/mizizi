@@ -33,7 +33,8 @@ until the sample lesson is finished.
 | Onboarding gate | `/onboarding/*` | Enforced in `proxy.ts`; five screens then a sample lesson |
 | Today | `/today` | Streak, daily goal, weekly strip, next lesson, Word of the Day |
 | Learn | `/learn` | Orientation course generated from the registry |
-| Notebook | `/notebook` | Cross-language save-list, source tags, "Quiz me on these" |
+| Notebook | `/notebook` | Saved words and free-text lesson notes, source tags, "Quiz me on these" |
+| Speaking | `/learn/speak` | Listen, repeat, and advance when the recogniser understands you |
 | Tutor | `/practice` | AI tutor grounded in verified data only; ask by voice, replies read aloud |
 | Translate | `/translate` | Concept-graph lookup, Google fallback, confidence tiers, dictation and playback |
 | Explore | `/explore` | Search across languages, cultures, books and words |
@@ -63,12 +64,16 @@ what they are looking at:
 | Layer | Source | Tier shown | Covers |
 |---|---|---|---|
 | Word graph | `data/` + `lib/db/vocabulary` | `verified` / `ai_suggested` | whatever has been seeded |
-| Machine translation | Google Translate, keyless (`lib/translation/google.ts`) | `machine_generated` | Kiswahili, Dholuo, Somali, Oromo (Borana/Orma) |
+| Curated dictionary | English Wiktionary (`lib/translation/wiktionary.ts`) | `corpus_supported` | **22 languages**, single English words |
+| Machine translation | Google Translate, keyless (`lib/translation/google.ts`) | `machine_generated` | 4 languages, whole sentences |
 | — | nothing invented | `not_available` | everything else |
 
-The graph always wins; Google is only asked when the graph has nothing. Google's endpoint accepts
-some codes it does not actually translate (Gikuyu, for one) and echoes the input back — that is
-detected and discarded rather than shown as a translation.
+The graph always wins. Wiktionary is asked next — it is human-edited and cited (CC BY-SA 4.0),
+and it reaches Gikuyu, Kamba, Maasai, Meru, Luhya, Turkana and more that no machine translator
+covers. Google is last, and is the only source that handles sentences.
+
+Google's endpoint accepts some codes it does not actually translate (Gikuyu, for one) and echoes
+the input back — that is detected and discarded rather than shown as a translation.
 
 Voice is likewise split, and neither half needs an API key:
 
@@ -106,3 +111,18 @@ lib/search/           knowledge-graph search
 proxy.ts              onboarding gate
 supabase/             migrations and generated seed
 ```
+
+## Lesson notes
+
+Learners can write notes during any lesson; they collect in the Notebook.
+
+Notes live in `lib/db/notes.ts` (Postgres when `DATABASE_URL` is set, in-memory otherwise) and
+**not** in the session cookie, unlike the rest of the learner's state. That is a measured
+decision: one 240-character note costs 452 bytes in the cookie and **1,652 bytes if it contains
+accented characters**, because URL-encoding triples every non-ASCII byte — and notes about
+Gĩkũyũ or maĩ obviously do. A browser drops an oversized cookie silently, taking the streak and
+the notebook with it.
+
+`trimToFit` in `lib/session` guards the same limit for what does stay in the cookie. It is not
+theoretical: `NOTEBOOK_LIMIT` is 40 and one entry costs ~135 bytes encoded, so a full notebook is
+~5.9KB on its own and would have silently wiped the session before the guard existed.

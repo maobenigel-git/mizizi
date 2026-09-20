@@ -114,6 +114,20 @@ export default async function TranslatePage({ searchParams }: PageProps<"/transl
               {result.confidence === "ai_suggested" && (
                 <p className="text-sm text-muted">This entry has not been checked by a speaker yet. Treat it as a suggestion.</p>
               )}
+              {result.engine === "wiktionary" && (
+                <p className="rounded-[var(--radius-control)] bg-[var(--glass-inset-bg)] px-3 py-2 text-sm text-muted">
+                  From{" "}
+                  <a
+                    href={`https://en.wiktionary.org/wiki/${encodeURIComponent(q.trim().toLowerCase())}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="font-medium text-accent hover:underline"
+                  >
+                    English Wiktionary
+                  </a>
+                  , a human-edited dictionary ({result.license}). Not yet checked by a {nameOf(to)} speaker on Mizizi.
+                </p>
+              )}
               {result.engine === "google" && (
                 <p className="rounded-[var(--radius-control)] bg-[var(--glass-inset-bg)] px-3 py-2 text-sm text-muted">
                   Our word graph has no entry for this yet, so this came from Google Translate. It is machine output,

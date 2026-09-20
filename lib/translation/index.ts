@@ -2,16 +2,24 @@ import { listVocabulary } from "@/lib/db/vocabulary";
 import type { ConfidenceTier } from "@/types";
 import { ENGLISH } from "./codes";
 import { googleSupports, googleTranslate } from "./google";
+import { WIKTIONARY_LICENSE, wiktionarySupports, wiktionaryTranslate } from "./wiktionary";
 
 // Translation over the shared-concept graph (docs/spec.md §1.8): a term resolves
 // to a concept, and the concept to the target language directly — no pivot
 // through English. The graph is always consulted first and always wins.
 //
-// Where the graph has nothing, Google Translate is asked as a clearly-labelled
-// fallback for the handful of languages it covers. Its output enters at the
-// `machine_generated` tier and carries `engine: "google"`, so the UI can say
-// where it came from; it is never promoted to a verified translation. When
-// neither has an answer the result stays `not_available`.
+// Where the graph has nothing, two outside sources are asked in turn, each
+// entering at a tier that reflects what it actually is:
+//
+//   Wiktionary  human-edited, cited, CC BY-SA -> `corpus_supported`
+//               single English words only, but reaches twenty-odd languages
+//   Google      machine output -> `machine_generated`
+//               four languages, but handles whole sentences
+//
+// Wiktionary goes first because a curated dictionary entry beats machine
+// output. Neither is ever promoted to a verified translation, both carry an
+// `engine` so the UI can attribute them, and when nobody has an answer the
+// result stays `not_available` rather than becoming a guess.
 
 export { ENGLISH };
 
@@ -33,7 +41,9 @@ export type TranslationResult = {
   confidence: ConfidenceTier;
   example?: { text: string; meaning: string };
   /** Which system produced `text`. Absent when there is no translation. */
-  engine?: "graph" | "google";
+  engine?: "graph" | "wiktionary" | "google";
+  /** Licence that must be shown with `text`, where the source requires one. */
+  license?: string;
 };
 
 const normalise = (text: string) => text.trim().toLowerCase().replace(/[.!?,]+$/g, "");
@@ -61,7 +71,9 @@ export async function translate(query: string, from: string, to: string): Promis
     conceptId: target.conceptId,
     text: target.term,
     confidence: tierOf(target.verified && source.verified),
-    example: { text: target.example, meaning: target.exampleMeaning },
+    ...(target.example && target.exampleMeaning
+      ? { example: { text: target.example, meaning: target.exampleMeaning } }
+      : {}),
     engine: "graph",
   };
 }
@@ -73,13 +85,25 @@ async function machineFallback(
   to: string,
   miss: TranslationResult,
 ): Promise<TranslationResult> {
-  const text = await googleTranslate(query, from, to);
-  return text ? { ...miss, text, confidence: "machine_generated", engine: "google" } : miss;
+  const curated = await wiktionaryTranslate(query, from, to);
+  if (curated) {
+    return { ...miss, text: curated, confidence: "corpus_supported", engine: "wiktionary", license: WIKTIONARY_LICENSE };
+  }
+  const machine = await googleTranslate(query, from, to);
+  return machine ? { ...miss, text: machine, confidence: "machine_generated", engine: "google" } : miss;
 }
 
-/** True when a machine translator exists for the pair, so the UI can say why it is empty. */
+/** True when any outside source covers the pair, so the UI can say why it is empty. */
 export function machineTranslationAvailable(from: string, to: string): boolean {
-  return googleSupports(from) && googleSupports(to);
+  return (googleSupports(from) && googleSupports(to)) || wiktionarySupports(to);
+}
+
+/** Every language an outside source can translate into, for the UI to badge. */
+export function outsideSourcesFor(languageId: string): ("wiktionary" | "google")[] {
+  const sources: ("wiktionary" | "google")[] = [];
+  if (wiktionarySupports(languageId)) sources.push("wiktionary");
+  if (googleSupports(languageId)) sources.push("google");
+  return sources;
 }
 
 /** Seed entries were drafted by an AI and not yet checked, so they rank lowest. */

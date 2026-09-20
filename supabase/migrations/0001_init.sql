@@ -504,3 +504,21 @@ create table ai_feedback (
   comment      text,
   created_at   timestamptz not null default now()
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- Learner notes
+-- ─────────────────────────────────────────────────────────────
+-- Free text a learner writes during a lesson. Kept out of the session cookie:
+-- accented notes cost ~1.6KB each once URL-encoded, which overflows the ~4KB
+-- cookie limit and silently drops the whole session (see lib/db/notes.ts).
+
+create table learner_notes (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null,
+  text         text not null,
+  language_id  text references languages(id),
+  context      text,
+  created_at   timestamptz not null default now()
+);
+
+create index learner_notes_user_created_idx on learner_notes (user_id, created_at desc);

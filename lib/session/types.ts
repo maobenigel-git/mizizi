@@ -47,6 +47,10 @@ export type NotebookEntry = {
 };
 
 export const NOTEBOOK_LIMIT = 40;
+
+/** Here rather than lib/db/notes so client components can import it. */
+export const NOTE_MAX_LENGTH = 500;
+
 export const STREAK_MILESTONES = [7, 30, 100, 365];
 
 export type Session = {

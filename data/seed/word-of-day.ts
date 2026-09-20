@@ -7,9 +7,12 @@ export type SeedWord = {
   languageId: string;
   term: string;
   meaning: string;
-  example: string;
-  exampleMeaning: string;
+  /** Omitted where no cited example sentence exists — never invented. */
+  example?: string;
+  exampleMeaning?: string;
   note?: string;
+  /** Where the entry came from, shown with it. Seed words without one are ours. */
+  source?: { title: string; url: string; license: string };
   /** Hub of the translation graph (docs/spec.md §1.8). */
   conceptId: string;
   phonetic?: string;
@@ -90,6 +93,47 @@ export const seedWords: SeedWord[] = [
     example: "Safari njema!",
     exampleMeaning: "Have a good journey!",
     note: "English borrowed “safari” from Kiswahili.",
+    verified: false,
+  },
+  // ── Gikuyu ──────────────────────────────────────────────
+  // Taken from English Wiktionary's Kikuyu entries, not written by us. No
+  // example sentences: we have cited words but no cited Gikuyu sentences, and
+  // an invented one would be exactly the guess the spec forbids. `verified`
+  // stays false until a Gikuyu speaker checks these on Mizizi.
+  {
+    id: "gikuyu:mai",
+    languageId: "gikuyu",
+    term: "maĩ",
+    conceptId: "WATER",
+    meaning: "water",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/maĩ", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:mwaki",
+    languageId: "gikuyu",
+    term: "mwaki",
+    conceptId: "FIRE",
+    meaning: "fire",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/mwaki", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:irio",
+    languageId: "gikuyu",
+    term: "irio",
+    conceptId: "FOOD",
+    meaning: "food",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/irio", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:nyumba",
+    languageId: "gikuyu",
+    term: "nyũmba",
+    conceptId: "HOUSE",
+    meaning: "house",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/nyũmba", license: "CC BY-SA 4.0" },
     verified: false,
   },
 ];

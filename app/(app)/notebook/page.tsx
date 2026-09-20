@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PronunciationButton } from "@/components/pronunciation/PronunciationButton";
 import { getLanguage } from "@/lib/db/languages";
+import { listNotes } from "@/lib/db/notes";
 import { getWord, type Word } from "@/lib/db/vocabulary";
 import { getSession } from "@/lib/session";
-import { toggleNotebook } from "@/lib/session/actions";
+import { deleteNote, toggleNotebook } from "@/lib/session/actions";
 import type { NotebookSource } from "@/lib/session/types";
 
 export const metadata: Metadata = { title: "Notebook · Mizizi" };
@@ -18,6 +19,7 @@ const sourceLabels: Record<NotebookSource, string> = {
 
 export default async function NotebookPage({ searchParams }: PageProps<"/notebook">) {
   const [{ source }, session] = await Promise.all([searchParams, getSession()]);
+  const notes = session.userId ? await listNotes(session.userId) : [];
   const filter = typeof source === "string" && source in sourceLabels ? (source as NotebookSource) : undefined;
 
   const entries = session.notebook.filter((e) => !filter || e.source === filter);
@@ -58,11 +60,36 @@ export default async function NotebookPage({ searchParams }: PageProps<"/noteboo
         </nav>
       )}
 
-      {groups.size === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border p-8 text-center text-muted">
-          Nothing saved yet. Tap “Save to notebook” on the Word of the Day or in Translate.
+      {notes.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-muted">Your notes</h2>
+          <ul className="glass divide-y divide-[var(--glass-edge)]">
+            {notes.map((note) => (
+              <li key={note.id} className="flex items-start gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="whitespace-pre-wrap break-words">{note.text}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {note.context ? `On “${note.context}” · ` : ""}
+                    {new Date(note.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                  </p>
+                </div>
+                <form action={deleteNote.bind(null, note.id)}>
+                  <button type="submit" aria-label="Delete note" className="press px-2 text-xl leading-none text-muted hover:text-red">
+                    ×
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {groups.size === 0 && notes.length === 0 ? (
+        <p className="glass p-8 text-center text-muted">
+          Nothing saved yet. Tap “Save to notebook” on the Word of the Day or in Translate, or write a note during a
+          lesson.
         </p>
-      ) : (
+      ) : groups.size === 0 ? null : (
         await Promise.all(
           [...groups].map(async ([languageId, rows]) => (
             <section key={languageId} className="space-y-2">

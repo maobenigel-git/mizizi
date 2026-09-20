@@ -1,4 +1,5 @@
 import { families, languages } from "@/data/languages/registry";
+import { seedWords } from "@/data/seed/word-of-day";
 import type { Language } from "@/types";
 
 // Orientation course: lessons generated purely from the language registry, so
@@ -164,11 +165,72 @@ function relatives(language: Language, seed: number): Lesson {
   };
 }
 
+/*
+ * A vocabulary lesson, built only from words actually seeded for the language.
+ * Languages with no seeded words simply do not get one — the orientation
+ * lessons above are generated from the registry and always exist.
+ */
+function vocabulary(language: Language): Lesson | undefined {
+  const words = seedWords.filter((w) => w.languageId === language.id);
+  if (words.length < 2) return undefined;
+
+  const steps: LessonStep[] = [
+    {
+      kind: "info",
+      title: `Your first ${language.name} words`,
+      body: `${words.length} words, each one taken from a cited source rather than written by us. None has been checked by a ${language.name} speaker on Mizizi yet, so treat them as a starting point.`,
+    },
+  ];
+  for (const word of words) {
+    // Distractors are other real meanings from the same language, so a wrong
+    // answer is still a real word rather than something invented.
+    const others = words.filter((w) => w.id !== word.id).map((w) => w.meaning);
+    const options = [word.meaning, ...pick(others, 2, hash(word.id))].sort();
+    steps.push({
+      kind: "choice",
+      prompt: `What does “${word.term}” mean?`,
+      options,
+      answer: options.indexOf(word.meaning),
+      explain: word.source ? `${word.term} — ${word.meaning}. Source: ${word.source.title}.` : `${word.term} — ${word.meaning}.`,
+    });
+  }
+
+  return {
+    id: `${language.id}:words`,
+    slug: "words",
+    title: `First ${language.name} words`,
+    summary: `${words.length} words to recognise.`,
+    steps,
+  };
+}
+
+/*
+ * The speaking lesson has no generated steps — it is driven by
+ * lib/lessons/speaking at request time — but it must appear in the course so
+ * that completeLesson() recognises its slug and credits the streak.
+ */
+function speaking(language: Language): Lesson {
+  return {
+    id: `${language.id}:speaking`,
+    slug: "speaking",
+    title: "Speaking practice",
+    summary: "Hear a phrase, say it back.",
+    steps: [],
+  };
+}
+
 export function getCourse(languageId: string): Lesson[] {
   const language = languages.find((l) => l.id === languageId);
   if (!language) return [];
   const seed = hash(language.id);
-  return [meet(language, seed), names(language, seed), relatives(language, seed)];
+  const words = vocabulary(language);
+  return [
+    meet(language, seed),
+    ...(words ? [words] : []),
+    names(language, seed),
+    relatives(language, seed),
+    speaking(language),
+  ];
 }
 
 export function getLesson(languageId: string, slug: string): Lesson | undefined {

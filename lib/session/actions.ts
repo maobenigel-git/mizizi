@@ -8,6 +8,7 @@ import { getLanguage } from "@/lib/db/languages";
 import { revalidatePath } from "next/cache";
 import { interestTags, joinDirectory, leaveDirectory } from "@/lib/db/community";
 import { listTasks, submitContribution } from "@/lib/db/contributions";
+import { addNote, NOTE_MAX_LENGTH, removeNote } from "@/lib/db/notes";
 import { getWord } from "@/lib/db/vocabulary";
 import { getLesson } from "@/lib/lessons/orientation";
 import type { ProficiencyLevel } from "@/types";
@@ -222,4 +223,41 @@ export async function resetSession() {
   const jar = await cookies();
   for (const name of [COOKIE_COMPLETED, COOKIE_STEP, COOKIE_SESSION]) jar.delete(name);
   redirect("/onboarding/welcome");
+}
+
+
+/*
+ * Lesson notes. Stored in lib/db/notes, not the session cookie — see that
+ * file for why. The cookie only carries the anonymous userId the notes hang
+ * off, minted here on the first note if the learner has none yet.
+ */
+export type NoteResult = { ok: true } | { ok: false; message: string };
+
+export async function saveNote(formData: FormData): Promise<NoteResult> {
+  const session = await getSession();
+  const text = String(formData.get("text") ?? "").trim().slice(0, NOTE_MAX_LENGTH);
+  if (!text) return { ok: false, message: "Write something first." };
+  if (!session.languageId) return { ok: false, message: "Choose a language first." };
+
+  const userId = session.userId ?? randomUUID();
+  if (!session.userId) await saveSession({ ...session, userId });
+
+  await addNote({
+    id: randomUUID(),
+    userId,
+    text,
+    languageId: session.languageId,
+    context: String(formData.get("context") ?? "").trim().slice(0, 80) || undefined,
+    createdAt: new Date().toISOString(),
+  });
+  revalidatePath("/notebook");
+  return { ok: true };
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const { userId } = await getSession();
+  // No userId means no notes of their own to delete.
+  if (!userId) return;
+  await removeNote(userId, id);
+  revalidatePath("/notebook");
 }

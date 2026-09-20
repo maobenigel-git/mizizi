@@ -2,12 +2,14 @@ import { redirect } from "next/navigation";
 import { LessonPlayer } from "@/components/lessons/LessonPlayer";
 import type { Lesson } from "@/lib/lessons/orientation";
 import { getWord, listVocabulary } from "@/lib/db/vocabulary";
+import { countNotes } from "@/lib/db/notes";
 import { getSession } from "@/lib/session";
 import { completeReview } from "@/lib/session/actions";
 
 /** "Quiz me on these": a review session built only from the learner's saved items. */
 export default async function NotebookReviewPage() {
   const session = await getSession();
+  const noteCount = session.userId ? await countNotes(session.userId) : 0;
   const saved = (await Promise.all(session.notebook.map((e) => getWord(e.id)))).filter((w) => w !== undefined);
   if (saved.length === 0) redirect("/notebook");
 
@@ -28,10 +30,10 @@ export default async function NotebookReviewPage() {
         prompt: `What does “${word.term}” mean?`,
         options: rotated,
         answer: rotated.indexOf(word.meaning),
-        explain: `${word.example} — ${word.exampleMeaning}`,
+        explain: word.example && word.exampleMeaning ? `${word.example} — ${word.exampleMeaning}` : undefined,
       };
     }),
   };
 
-  return <LessonPlayer lesson={lesson} complete={completeReview} exitHref="/notebook" />;
+  return <LessonPlayer lesson={lesson} noteCount={noteCount} complete={completeReview} exitHref="/notebook" />;
 }

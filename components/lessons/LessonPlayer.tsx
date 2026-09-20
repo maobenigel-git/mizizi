@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { LessonNotes } from "@/components/lessons/LessonNotes";
 import { FlameIcon } from "@/components/shell/StreakFlame";
 import type { Lesson } from "@/lib/lessons/orientation";
 import type { LessonResult } from "@/lib/session/actions";
@@ -12,10 +13,13 @@ const primaryButton =
 
 export function LessonPlayer({
   lesson,
+  noteCount,
   complete,
   exitHref,
 }: {
   lesson: Lesson;
+  /** Shown on the notes button so the learner sees the list growing. */
+  noteCount: number;
   /** Server action that records the finished activity (lesson or review). */
   complete: () => Promise<LessonResult>;
   /** Where the × goes. */
@@ -68,7 +72,7 @@ export function LessonPlayer({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5">
       <div className="flex items-center gap-3">
         <Link href={exitHref} transitionTypes={["nav-back"]} aria-label="Leave lesson" className="text-2xl leading-none text-muted hover:text-foreground">
             ×
@@ -125,6 +129,8 @@ export function LessonPlayer({
           </>
         )}
       </div>
+
+      <LessonNotes context={step.kind === "info" ? step.title : step.prompt} count={noteCount} />
 
       <button type="button" onClick={next} disabled={!answered || saving} className={primaryButton}>
         {isLast ? "Finish" : "Continue"}

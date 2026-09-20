@@ -3,6 +3,7 @@ import { listVocabulary } from "@/lib/db/vocabulary";
 import { dictationTagFor, hasMachineVoice, speechTagFor } from "@/lib/speech/voices";
 import { ENGLISH } from "@/lib/translation/codes";
 import { googleSupports, googleTranslate } from "@/lib/translation/google";
+import { wiktionarySupports, wiktionaryTranslate } from "@/lib/translation/wiktionary";
 
 /*
  * Speaking practice: a phrase is read aloud, the learner says it back, and the
@@ -28,7 +29,7 @@ export type SpeakingPhrase = {
   /** What it means in English. */
   meaning: string;
   /** Where `text` came from, so the UI can label unverified content. */
-  origin: "graph" | "google";
+  origin: "graph" | "wiktionary" | "google";
   verified: boolean;
 };
 
@@ -53,6 +54,14 @@ const STARTER_SENTENCES = [
   "I am learning this language",
 ];
 
+/*
+ * Single words for the eighteen languages Wiktionary covers but Google does
+ * not. Without these, every one of them would open the lesson on "no phrases
+ * to practise" — a dictionary word is a worse lesson than a sentence, and a
+ * far better one than an empty screen.
+ */
+const STARTER_WORDS = ["water", "fire", "food", "mother", "house", "tree", "sun", "name", "moon", "child"];
+
 const MAX_PHRASES = 8;
 
 export async function getSpeakingLesson(languageId: string): Promise<SpeakingLesson> {
@@ -60,26 +69,37 @@ export async function getSpeakingLesson(languageId: string): Promise<SpeakingLes
 
   const fromGraph: SpeakingPhrase[] = words.flatMap((w) => [
     { id: `${w.id}:term`, text: w.term, meaning: w.meaning, origin: "graph" as const, verified: w.verified },
-    ...(w.example
+    // Both halves or neither: an example with no gloss teaches nothing.
+    ...(w.example && w.exampleMeaning
       ? [{ id: `${w.id}:example`, text: w.example, meaning: w.exampleMeaning, origin: "graph" as const, verified: w.verified }]
       : []),
   ]);
 
-  // Top up from Google so a language with little seeded data still has a lesson.
-  const fromGoogle: SpeakingPhrase[] = [];
-  if (fromGraph.length < MAX_PHRASES && googleSupports(languageId)) {
-    const needed = STARTER_SENTENCES.slice(0, MAX_PHRASES - fromGraph.length);
-    const translated = await Promise.all(needed.map((s) => googleTranslate(s, ENGLISH, languageId)));
+  // Top up from outside sources so a language with little seeded data still has
+  // a lesson. Both lookups fan out in parallel — a lesson is built on every
+  // page load, so doing these in series would be the slowest thing on the screen.
+  const topUp: SpeakingPhrase[] = [];
+  const shortfall = MAX_PHRASES - fromGraph.length;
+
+  if (shortfall > 0 && googleSupports(languageId)) {
+    const wanted = STARTER_SENTENCES.slice(0, shortfall);
+    const translated = await Promise.all(wanted.map((s) => googleTranslate(s, ENGLISH, languageId)));
     translated.forEach((text, i) => {
-      if (text) {
-        fromGoogle.push({ id: `google:${i}`, text, meaning: needed[i], origin: "google", verified: false });
-      }
+      if (text) topUp.push({ id: `google:${i}`, text, meaning: wanted[i], origin: "google", verified: false });
+    });
+  }
+
+  if (topUp.length < shortfall && wiktionarySupports(languageId)) {
+    const wanted = STARTER_WORDS.slice(0, shortfall - topUp.length);
+    const translated = await Promise.all(wanted.map((w) => wiktionaryTranslate(w, ENGLISH, languageId)));
+    translated.forEach((text, i) => {
+      if (text) topUp.push({ id: `wiktionary:${i}`, text, meaning: wanted[i], origin: "wiktionary", verified: false });
     });
   }
 
   return {
     languageId,
-    phrases: [...fromGraph, ...fromGoogle].slice(0, MAX_PHRASES),
+    phrases: [...fromGraph, ...topUp].slice(0, MAX_PHRASES),
     canSpeak: hasMachineVoice(languageId),
     canListen: Boolean(dictationTagFor(languageId)),
     localeTag: dictationTagFor(languageId),
