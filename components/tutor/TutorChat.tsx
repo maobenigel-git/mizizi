@@ -17,7 +17,19 @@ type Turn = { role: "user" | "assistant"; content: string };
  */
 const TUTOR_VOICE = ENGLISH;
 
-export function TutorChat({ languageName, starters }: { languageName: string; starters: string[] }) {
+export function TutorChat({
+  languageName,
+  provider,
+  modelBacked,
+  starters,
+}: {
+  languageName: string;
+  /** Human-readable engine name, shown so the learner knows what answered. */
+  provider: string;
+  /** False when the lookup-only fallback is answering, which the UI says plainly. */
+  modelBacked: boolean;
+  starters: string[];
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
@@ -56,6 +68,14 @@ export function TutorChat({ languageName, starters }: { languageName: string; st
         {turns.length === 0 && (
           <div className="space-y-3">
             <p className="text-muted">Ask your {languageName} tutor anything. Try:</p>
+            {!modelBacked && (
+              <p className="rounded-[var(--radius-control)] bg-[var(--glass-inset-bg)] px-3 py-2 text-sm text-muted">
+                No AI model is connected, so the tutor answers by looking words up in the checked word list and Google
+                Translate. It will not guess. Add a free <code className="font-mono text-xs">GEMINI_API_KEY</code> (or{" "}
+                <code className="font-mono text-xs">OPENROUTER_API_KEY</code>) to <code className="font-mono text-xs">.env.local</code>{" "}
+                for a conversational tutor.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               {starters.map((s) => (
                 <button key={s} type="button" onClick={() => send(s)} className="rounded-full border border-[var(--glass-edge)] bg-[var(--glass-inset-bg)] px-3.5 py-2 text-sm backdrop-blur transition-all duration-200 ease-out hover:border-accent hover:text-accent">
@@ -115,6 +135,7 @@ export function TutorChat({ languageName, starters }: { languageName: string; st
             Send
           </button>
         </div>
+        <p className="px-1 text-[11px] text-muted">Answered by {provider}</p>
         {/* Dictation sends as soon as the speaker stops, so a spoken question
             behaves like a spoken question rather than filling a box. */}
         <VoiceInput

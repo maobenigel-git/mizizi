@@ -25,6 +25,21 @@ export default async function LearnPage() {
         </p>
       </header>
 
+      <Link
+        href="/learn/speak"
+        className="glass press flex items-center gap-4 p-4"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-solid text-white">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="h-5 w-5">
+            <path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3ZM5 11a7 7 0 0 0 14 0M12 18v3" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">Speaking practice</span>
+          <span className="block text-sm text-muted">Hear a phrase, say it back, and move on when you are understood.</span>
+        </span>
+      </Link>
+
       <ol className="space-y-3">
         {course.map((lesson, i) => {
           const done = session.completedLessons.includes(lesson.id);

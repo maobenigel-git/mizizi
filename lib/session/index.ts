@@ -29,7 +29,10 @@ export async function getSession(): Promise<Session> {
   // screens behind it all key off one. Supply a development default so they
   // render as they would for a real learner.
   if (SKIP_ONBOARDING && !session.languageId) {
-    session = { ...session, languageId: "kiswahili", level: "beginner" };
+    // DEV_LANGUAGE picks which language the gated screens render as, so the
+    // per-language differences (voice, dictation, machine translation) can be
+    // checked without walking onboarding for each one.
+    session = { ...session, languageId: process.env.DEV_LANGUAGE || "kiswahili", level: "beginner" };
   }
   return { ...session, streak: settleStreak(session.streak, localDate()) };
 }

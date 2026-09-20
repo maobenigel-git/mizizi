@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { TutorChat } from "@/components/tutor/TutorChat";
-import { tutorConfigured } from "@/lib/ai/tutor";
+import { activeProvider, providerLabels } from "@/lib/ai/tutor";
 import { getLanguage } from "@/lib/db/languages";
 import { getSession } from "@/lib/session";
 
@@ -8,6 +8,7 @@ export const metadata: Metadata = { title: "Tutor · Mizizi" };
 
 export default async function PracticePage() {
   const session = await getSession();
+  const provider = activeProvider();
   const language = session.languageId ? await getLanguage(session.languageId) : undefined;
   const name = language?.name ?? "language";
 
@@ -20,21 +21,12 @@ export default async function PracticePage() {
           than guess.
         </p>
       </header>
-      {tutorConfigured ? (
-        <TutorChat
-          languageName={name}
-          starters={[`Teach me a greeting in ${name}`, "Quiz me on what I know", `What can you teach me in ${name} today?`]}
-        />
-      ) : (
-        <div className="glass space-y-2 p-8 text-center">
-          <p className="text-muted">The tutor is not connected on this server yet.</p>
-          <p className="text-sm text-muted">
-            Set <code className="rounded bg-[var(--glass-inset-bg)] px-1.5 py-0.5 font-mono text-xs">ANTHROPIC_API_KEY</code> in{" "}
-            <code className="rounded bg-[var(--glass-inset-bg)] px-1.5 py-0.5 font-mono text-xs">.env.local</code> and restart the
-            server. Translate and its voice features work without it.
-          </p>
-        </div>
-      )}
+      <TutorChat
+        languageName={name}
+        provider={providerLabels[provider]}
+        modelBacked={provider !== "grounded"}
+        starters={[`Teach me a greeting in ${name}`, "Quiz me on what I know", `What can you teach me in ${name} today?`]}
+      />
     </div>
   );
 }
