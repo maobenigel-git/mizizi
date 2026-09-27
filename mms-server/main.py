@@ -34,8 +34,11 @@ import logging
 import os
 import secrets
 import threading
+import time
+from collections import Counter, defaultdict
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 import librosa
 import numpy as np
@@ -81,6 +84,33 @@ class Models:
 
 
 models = Models()
+
+# What this GPU has actually done since start-up, reported by /health: the
+# record of how the compute is being used (e.g. for NVIDIA Brev credit reports).
+usage = {
+    "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    "requests": Counter(),  # route -> count
+    "gpu_seconds": defaultdict(float),  # route -> seconds of model inference
+    "languages": Counter(),  # "route:lang" -> count
+}
+
+
+def record(route: str, language: str, started: float) -> None:
+    usage["requests"][route] += 1
+    usage["gpu_seconds"][route] += time.perf_counter() - started
+    usage["languages"][f"{route}:{language}"] += 1
+
+
+def gpu_info() -> dict | None:
+    if not torch.cuda.is_available():
+        return None
+    props = torch.cuda.get_device_properties(0)
+    return {
+        "name": torch.cuda.get_device_name(0),
+        "memory_total_gb": round(props.total_memory / 1e9, 1),
+        "memory_allocated_gb": round(torch.cuda.memory_allocated(0) / 1e9, 2),
+        "cuda": torch.version.cuda,
+    }
 # One request on the GPU at a time: the ASR adapter is swapped per language,
 # which is not safe to do while another request is mid-inference.
 gpu = threading.Lock()
@@ -134,9 +164,19 @@ def health() -> dict:
     return {
         "status": "ok",
         "device": DEVICE,
+        "gpu": gpu_info(),
+        "torch": torch.__version__,
+        "asr_model": ASR_MODEL,
         "asr_languages": sorted(models.asr_languages),
         "tts_languages": sorted(models.tts),
         "translation": models.nllb is not None,
+        "translation_model": NLLB_MODEL or None,
+        "usage": {
+            "started_at": usage["started_at"],
+            "requests": dict(usage["requests"]),
+            "gpu_seconds": {k: round(v, 2) for k, v in usage["gpu_seconds"].items()},
+            "languages": dict(usage["languages"]),
+        },
     }
 
 
@@ -200,6 +240,7 @@ def transcribe(audio: UploadFile = File(...), language: str = Form(...)) -> dict
         raise HTTPException(status_code=400, detail="audio too short")
 
     with gpu:
+        started = time.perf_counter()
         if models.asr_language != language:
             models.asr_processor.tokenizer.set_target_lang(language)
             models.asr_model.load_adapter(language)
@@ -211,6 +252,7 @@ def transcribe(audio: UploadFile = File(...), language: str = Form(...)) -> dict
         confidence, ids = probabilities.max(dim=-1)
         transcript = models.asr_processor.decode(ids)
         words = word_confidences(ids.cpu(), confidence.cpu())
+        record("transcribe", language, started)
 
     return {"transcript": transcript, "words": words, "language": language}
 
@@ -231,6 +273,7 @@ def synthesize(request: SynthesisRequest) -> Response:
     model, tokenizer = voice
 
     with gpu:
+        started = time.perf_counter()
         inputs = tokenizer(request.text, return_tensors="pt").to(DEVICE)
         if inputs["input_ids"].shape[-1] == 0:
             raise HTTPException(status_code=400, detail="nothing speakable in that text")
@@ -238,6 +281,7 @@ def synthesize(request: SynthesisRequest) -> Response:
         set_seed(555)
         with torch.inference_mode():
             waveform = model(**inputs).waveform[0].cpu().numpy()
+        record("synthesize", request.language.strip().lower(), started)
 
     buffer = io.BytesIO()
     sf.write(buffer, waveform, model.config.sampling_rate, format="WAV", subtype="PCM_16")
@@ -271,8 +315,10 @@ def translate(request: TranslationRequest) -> list[dict]:
         raise HTTPException(status_code=400, detail=f"unknown target language '{request.parameters.tgt_lang}'")
 
     with gpu:
+        started = time.perf_counter()
         tokenizer.src_lang = request.parameters.src_lang
         inputs = tokenizer(request.inputs, return_tensors="pt", truncation=True, max_length=512).to(DEVICE)
         with torch.inference_mode():
             output = model.generate(**inputs, forced_bos_token_id=target, max_new_tokens=256)
+        record("translate", request.parameters.tgt_lang, started)
     return [{"translation_text": tokenizer.batch_decode(output, skip_special_tokens=True)[0]}]
