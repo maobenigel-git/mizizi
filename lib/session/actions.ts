@@ -8,25 +8,27 @@ import { getLanguage } from "@/lib/db/languages";
 import { revalidatePath } from "next/cache";
 import { interestTags, joinDirectory, leaveDirectory } from "@/lib/db/community";
 import { listTasks, submitContribution } from "@/lib/db/contributions";
+import { createAccount, loadState, verifyAccount } from "@/lib/db/accounts";
 import { addNote, NOTE_MAX_LENGTH, removeNote } from "@/lib/db/notes";
 import { getWord } from "@/lib/db/vocabulary";
-import { getLesson } from "@/lib/lessons/orientation";
+import { allowSignInAttempt } from "@/lib/rate-limit";
 import type { ProficiencyLevel } from "@/types";
-import { cookieOptions, getSession, saveSession } from "./index";
-import { localDate, recordActivity } from "./streak";
+import { normaliseContact, PASSWORD_MIN_LENGTH } from "./contact";
+import { cookieOptions, getSession, restore, saveSession } from "./index";
+import { recordSessionActivity, type LessonResult } from "./activity";
+import { localDate } from "./streak";
 import {
   COOKIE_COMPLETED,
   COOKIE_SESSION,
   COOKIE_STEP,
-  DAILY_LESSON_GOAL,
   NOTEBOOK_LIMIT,
   ONBOARDING_STEPS,
-  STREAK_MILESTONES,
-  XP_PER_LESSON,
+  SIGN_IN_PATH,
   type AvatarColor,
   type NotebookSource,
   type OnboardingStep,
-  type Session,
+  type SavedNote,
+  emptySession,
 } from "./types";
 
 const avatars: AvatarColor[] = ["ocean", "earth", "forest", "deep"];
@@ -45,13 +47,55 @@ export async function startOnboarding() {
   await advanceTo("account");
 }
 
+/*
+ * Accounts. Errors travel back as ?error=<code> so the forms stay plain server
+ * components that work before (or without) JavaScript; the pages turn the code
+ * into a sentence.
+ */
+export type AccountError = "contact" | "password" | "taken" | "credentials" | "limited";
+
 export async function saveAccount(formData: FormData) {
-  const contact = String(formData.get("contact") ?? "").trim();
-  if (!contact) redirect("/onboarding/account");
-  // TODO: create the account with the auth provider (phone-first). The
-  // password field is deliberately not read or stored until then.
-  await saveSession({ ...(await getSession()), contact });
+  const fail = (error: AccountError): never => redirect(`/onboarding/account?error=${error}`);
+  const contact = normaliseContact(String(formData.get("contact") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!contact) fail("contact");
+  if (password.length < PASSWORD_MIN_LENGTH) fail("password");
+
+  const session = await getSession();
+  // Going back to this step after creating the account must not create a
+  // second one; the account is already made, so just move on.
+  if (session.accountId) await advanceTo("profile");
+
+  const id = session.userId ?? randomUUID();
+  const created = await createAccount(id, contact!, password);
+  if (!created.ok) fail("taken");
+  await saveSession({ ...session, userId: id, accountId: id, contact });
   await advanceTo("profile");
+}
+
+export async function signIn(formData: FormData) {
+  const fail = (error: AccountError): never => redirect(`${SIGN_IN_PATH}?error=${error}`);
+  const contact = normaliseContact(String(formData.get("contact") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!contact || !password) fail("credentials");
+  if (!allowSignInAttempt(contact!)) fail("limited");
+
+  const accountId = await verifyAccount(contact!, password);
+  if (!accountId) fail("credentials");
+
+  const stored = await loadState(accountId!);
+  const session = restore(stored && typeof stored === "object" ? stored : {});
+  await saveSession({ ...session, userId: accountId, accountId, contact });
+
+  // An account whose owner never finished onboarding (no language yet) picks
+  // up at the language step; everyone else goes straight home.
+  const jar = await cookies();
+  if (!session.languageId) {
+    jar.set(COOKIE_STEP, String(ONBOARDING_STEPS.indexOf("language")), cookieOptions);
+    redirect("/onboarding/language");
+  }
+  jar.set(COOKIE_COMPLETED, "true", cookieOptions);
+  redirect("/today");
 }
 
 export async function saveProfile(formData: FormData) {
@@ -105,54 +149,7 @@ export async function updateProfile(formData: FormData) {
   redirect("/profile?saved=1");
 }
 
-export type LessonResult = {
-  streak: number;
-  streakIncremented: boolean;
-  /** Set when this activity took the streak to 7, 30, 100 or 365 days. */
-  milestone: number | null;
-  lessonsToday: number;
-  goal: number;
-  xpEarned: number;
-};
-
-/** One qualifying activity: daily count, streak (once per day) and XP. */
-function recordSessionActivity(session: Session): { session: Session; result: LessonResult } {
-  const today = localDate();
-  const { streak, incremented } = recordActivity(session.streak, today);
-  const lessonsToday = (session.activity[today] ?? 0) + 1;
-  const recent = Object.entries(session.activity).sort().slice(-13);
-  return {
-    session: {
-      ...session,
-      streak,
-      xp: session.xp + XP_PER_LESSON,
-      activity: { ...Object.fromEntries(recent), [today]: lessonsToday },
-    },
-    result: {
-      streak: streak.current,
-      streakIncremented: incremented,
-      milestone: incremented && STREAK_MILESTONES.includes(streak.current) ? streak.current : null,
-      lessonsToday,
-      goal: DAILY_LESSON_GOAL,
-      xpEarned: XP_PER_LESSON,
-    },
-  };
-}
-
-/** Records a finished lesson. */
-export async function completeLesson(slug: string): Promise<LessonResult> {
-  const current = await getSession();
-  const lesson = current.languageId ? getLesson(current.languageId, slug) : undefined;
-  if (!lesson) throw new Error("Unknown lesson");
-
-  const { session, result } = recordSessionActivity(current);
-  await saveSession({
-    ...session,
-    userId: session.userId ?? randomUUID(),
-    completedLessons: [...new Set([...session.completedLessons, lesson.id])],
-  });
-  return result;
-}
+export type { LessonResult } from "./activity";
 
 /** A finished notebook review counts as a qualifying activity too. */
 export async function completeReview(): Promise<LessonResult> {
@@ -168,6 +165,20 @@ export async function toggleNotebook(wordId: string, source: NotebookSource) {
     ? session.notebook.filter((e) => e.id !== wordId)
     : [...session.notebook, { id: wordId, type: "word" as const, source, savedAt: localDate() }].slice(-NOTEBOOK_LIMIT);
   await saveSession({ ...session, notebook });
+}
+
+/**
+ * Adds a word without toggling — for client screens (a lesson) that show their
+ * own "saved" state and must not remove the word on a second tap.
+ */
+export async function saveToNotebook(wordId: string, source: NotebookSource): Promise<boolean> {
+  const session = await getSession();
+  if (!(await getWord(wordId))) return false;
+  if (session.notebook.some((e) => e.id === wordId)) return true;
+  const entry = { id: wordId, type: "word" as const, source, savedAt: localDate() };
+  await saveSession({ ...session, notebook: [...session.notebook, entry].slice(-NOTEBOOK_LIMIT) });
+  revalidatePath("/notebook");
+  return true;
 }
 
 export async function dismissWordOfDay() {
@@ -218,11 +229,33 @@ export async function submitTask(formData: FormData) {
   redirect(`/community/contribute?thanks=${encodeURIComponent(task.key)}`);
 }
 
-/** Clears everything and sends the learner back through onboarding. */
-export async function resetSession() {
+async function clearDevice(): Promise<never> {
   const jar = await cookies();
   for (const name of [COOKIE_COMPLETED, COOKIE_STEP, COOKIE_SESSION]) jar.delete(name);
   redirect("/onboarding/welcome");
+}
+
+/** Signs out of this device. Progress stays with the account, ready to sign back in. */
+export async function signOut() {
+  await clearDevice();
+}
+
+/**
+ * Clears progress and starts over. For an account, the stored progress is
+ * reset too — otherwise signing back in would quietly restore what the
+ * learner asked to wipe. The account itself (and its sign-in) remains.
+ */
+export async function resetSession() {
+  const session = await getSession();
+  if (session.accountId) {
+    await saveSession({
+      ...emptySession,
+      userId: session.userId,
+      accountId: session.accountId,
+      contact: session.contact,
+    });
+  }
+  await clearDevice();
 }
 
 
@@ -231,7 +264,13 @@ export async function resetSession() {
  * file for why. The cookie only carries the anonymous userId the notes hang
  * off, minted here on the first note if the learner has none yet.
  */
-export type NoteResult = { ok: true } | { ok: false; message: string };
+/*
+ * The saved note comes back with the result so the lesson drawer can show it
+ * straight away. A lesson is a client-rendered focus screen that does not
+ * re-fetch between steps, so without this the learner saves a note and gets no
+ * evidence it exists until they leave.
+ */
+export type NoteResult = { ok: true; note: SavedNote } | { ok: false; message: string };
 
 export async function saveNote(formData: FormData): Promise<NoteResult> {
   const session = await getSession();
@@ -242,16 +281,15 @@ export async function saveNote(formData: FormData): Promise<NoteResult> {
   const userId = session.userId ?? randomUUID();
   if (!session.userId) await saveSession({ ...session, userId });
 
-  await addNote({
+  const note = {
     id: randomUUID(),
-    userId,
     text,
-    languageId: session.languageId,
     context: String(formData.get("context") ?? "").trim().slice(0, 80) || undefined,
     createdAt: new Date().toISOString(),
-  });
+  };
+  await addNote({ ...note, userId, languageId: session.languageId });
   revalidatePath("/notebook");
-  return { ok: true };
+  return { ok: true, note };
 }
 
 export async function deleteNote(id: string): Promise<void> {

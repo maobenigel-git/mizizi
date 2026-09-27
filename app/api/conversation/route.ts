@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { allowRequest } from "@/lib/ai/rate-limit";
+import { allowTutorRequest } from "@/lib/rate-limit";
 import { tutorReply, type TutorTurn } from "@/lib/ai/tutor";
 import { getSession } from "@/lib/session";
 import { COOKIE_COMPLETED, SKIP_ONBOARDING } from "@/lib/session/types";
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return Response.json({ status: "bad_request", message: "Choose a language first." }, { status: 400 });
   }
   const caller = session.userId ?? request.headers.get("x-forwarded-for") ?? "anonymous";
-  if (!allowRequest(caller)) {
+  if (!allowTutorRequest(caller)) {
     return Response.json({ status: "unavailable", message: "You have reached the hourly tutor limit. Try again later." }, { status: 429 });
   }
   const reply = await tutorReply(session.languageId, session.level, messages);

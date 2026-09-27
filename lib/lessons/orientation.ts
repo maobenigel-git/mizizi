@@ -1,5 +1,5 @@
 import { families, languages } from "@/data/languages/registry";
-import { seedWords } from "@/data/seed/word-of-day";
+import { seedWords, type SeedWord } from "@/data/seed/word-of-day";
 import type { Language } from "@/types";
 
 // Orientation course: lessons generated purely from the language registry, so
@@ -9,7 +9,15 @@ import type { Language } from "@/types";
 
 export type LessonStep =
   | { kind: "info"; title: string; body: string }
-  | { kind: "choice"; prompt: string; options: string[]; answer: number; explain?: string };
+  | {
+      kind: "choice";
+      prompt: string;
+      options: string[];
+      answer: number;
+      explain?: string;
+      /** The seeded word being tested, so the learner can save it to their notebook. */
+      wordId?: string;
+    };
 
 export type Lesson = {
   /** `${languageId}:${slug}` */
@@ -166,48 +174,82 @@ function relatives(language: Language, seed: number): Lesson {
 }
 
 /*
- * A vocabulary lesson, built only from words actually seeded for the language.
+ * Vocabulary lessons, built only from words actually seeded for the language.
  * Languages with no seeded words simply do not get one — the orientation
  * lessons above are generated from the registry and always exist.
+ *
+ * The pool is split into short lessons rather than one long one. A learner
+ * meeting a language for the first time should finish something in a couple of
+ * minutes, and the split is what lets new words arrive as a new lesson on the
+ * path instead of quietly lengthening a lesson they already completed.
+ *
+ * This is derived from the seed pool, so it holds for every language: nothing
+ * here knows which language it is looking at.
  */
-function vocabulary(language: Language): Lesson | undefined {
-  const words = seedWords.filter((w) => w.languageId === language.id);
-  if (words.length < 2) return undefined;
+const WORDS_PER_LESSON = 4;
 
-  const steps: LessonStep[] = [
-    {
-      kind: "info",
-      title: `Your first ${language.name} words`,
-      body: `${words.length} words, each one taken from a cited source rather than written by us. None has been checked by a ${language.name} speaker on Mizizi yet, so treat them as a starting point.`,
-    },
-  ];
-  for (const word of words) {
-    // Distractors are other real meanings from the same language, so a wrong
-    // answer is still a real word rather than something invented.
-    const others = words.filter((w) => w.id !== word.id).map((w) => w.meaning);
-    const options = [word.meaning, ...pick(others, 2, hash(word.id))].sort();
-    steps.push({
-      kind: "choice",
-      prompt: `What does “${word.term}” mean?`,
-      options,
-      answer: options.indexOf(word.meaning),
-      explain: word.source ? `${word.term} — ${word.meaning}. Source: ${word.source.title}.` : `${word.term} — ${word.meaning}.`,
-    });
+function chunkWords(words: SeedWord[]): SeedWord[][] {
+  const chunks: SeedWord[][] = [];
+  for (let i = 0; i < words.length; i += WORDS_PER_LESSON) chunks.push(words.slice(i, i + WORDS_PER_LESSON));
+  // A trailing chunk of one is a one-question lesson; fold it back rather than
+  // putting that on the path.
+  if (chunks.length > 1 && chunks[chunks.length - 1].length < 2) {
+    const tail = chunks.pop()!;
+    chunks[chunks.length - 1].push(...tail);
   }
+  return chunks;
+}
 
-  return {
-    id: `${language.id}:words`,
-    slug: "words",
-    title: `First ${language.name} words`,
-    summary: `${words.length} words to recognise.`,
-    steps,
-  };
+function vocabulary(language: Language): Lesson[] {
+  const all = seedWords.filter((w) => w.languageId === language.id);
+  if (all.length < 2) return [];
+
+  return chunkWords(all).map((chunk, index) => {
+    const first = index === 0;
+    const steps: LessonStep[] = [
+      {
+        kind: "info",
+        title: first ? `Your first ${language.name} words` : `${chunk.length} more ${language.name} words`,
+        body: first
+          ? `${chunk.length} words, each one taken from a cited source rather than written by us. None has been checked by a ${language.name} speaker on Mizizi yet, so treat them as a starting point.`
+          : `${chunk.length} more words from cited sources. Each one shows where it came from once you answer.`,
+      },
+    ];
+
+    for (const word of chunk) {
+      // Distractors are other real meanings from the same language — drawn from
+      // the whole pool, not just this lesson — so a wrong answer is still a
+      // real word rather than something invented.
+      const others = all.filter((w) => w.id !== word.id).map((w) => w.meaning);
+      const options = [word.meaning, ...pick(others, 2, hash(word.id))].sort();
+      steps.push({
+        kind: "choice",
+        wordId: word.id,
+        prompt: `What does “${word.term}” mean?`,
+        options,
+        answer: options.indexOf(word.meaning),
+        explain: word.source
+          ? `${word.term} — ${word.meaning}. ${word.note ? `${word.note} ` : ""}Source: ${word.source.title}.`
+          : `${word.term} — ${word.meaning}.${word.note ? ` ${word.note}` : ""}`,
+      });
+    }
+
+    // The first lesson keeps the slug "words" so paths already completed under
+    // it stay completed when a language's pool grows past one lesson.
+    const slug = first ? "words" : `words-${index + 1}`;
+    return {
+      id: `${language.id}:${slug}`,
+      slug,
+      title: first ? `First ${language.name} words` : index === 1 ? `More ${language.name} words` : `${language.name} words ${index + 1}`,
+      summary: `${chunk.length} words to recognise.`,
+      steps,
+    };
+  });
 }
 
 /*
- * The speaking lesson has no generated steps — it is driven by
- * lib/lessons/speaking at request time — but it must appear in the course so
- * that completeLesson() recognises its slug and credits the streak.
+ * The speaking level has no generated steps: its phrases are fetched by
+ * lib/lessons/speaking when the level is opened (see lib/lessons/levels).
  */
 function speaking(language: Language): Lesson {
   return {
@@ -219,28 +261,16 @@ function speaking(language: Language): Lesson {
   };
 }
 
-export function getCourse(languageId: string): Lesson[] {
+/** The generated course, in path order. lib/lessons/levels turns it into Levels 1…N. */
+export function generatedCourse(languageId: string): Lesson[] {
   const language = languages.find((l) => l.id === languageId);
   if (!language) return [];
   const seed = hash(language.id);
-  const words = vocabulary(language);
   return [
     meet(language, seed),
-    ...(words ? [words] : []),
+    ...vocabulary(language),
     names(language, seed),
     relatives(language, seed),
     speaking(language),
   ];
-}
-
-export function getLesson(languageId: string, slug: string): Lesson | undefined {
-  return getCourse(languageId).find((l) => l.slug === slug);
-}
-
-/** First unfinished lesson, or a rotating review once the course is done. */
-export function suggestLesson(languageId: string, completed: string[], dayIndex: number) {
-  const course = getCourse(languageId);
-  if (course.length === 0) return undefined;
-  const next = course.find((l) => !completed.includes(l.id));
-  return next ? { lesson: next, review: false } : { lesson: course[dayIndex % course.length], review: true };
 }

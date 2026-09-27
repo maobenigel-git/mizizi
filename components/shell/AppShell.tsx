@@ -24,6 +24,8 @@ export type ShellProfile = {
   activity: Record<string, number>;
   today: string;
   notebookCount: number;
+  /** Signed in to an account, so signing out keeps progress. */
+  hasAccount: boolean;
 };
 
 const tabs = [
@@ -32,7 +34,8 @@ const tabs = [
   { href: "/explore", label: "Explore", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm3.5-12.5-2 5-5 2 2-5 5-2Z" },
   { href: "/translate", label: "Translate", icon: "M4 6h9M8.5 4v2m3 0c-.6 3.4-3 6.4-7 8m2.5-5c1 2 2.7 3.6 5 4.7M13 20l4-9 4 9m-6.7-3h5.4" },
   { href: "/practice", label: "Tutor", icon: "M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.4A8 8 0 1 1 21 12Z" },
-  { href: "/notebook", label: "Notebook", icon: "M6 4h12v17l-6-4-6 4V4Z" },
+  // Notebook stays one tap away on Home, Learn and the profile panel.
+  { href: "/languages", label: "Languages", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-18c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9ZM3.5 9h17m-17 6h17" },
 ];
 
 /** Culture / heritage / community routes get the earth accent; the rest is ocean. */
@@ -60,9 +63,10 @@ export function AppShell({
   // Storing the pathname the panel was opened on closes it on any navigation.
   const [panelOpenOn, setPanelOpenOn] = useState<string | null>(null);
   const section = cultureRoutes.some((r) => pathname.startsWith(r)) ? "culture" : "learning";
+  // Explore stands for the culture section — except /languages, which has its own tab.
   const isActive = (href: string) =>
     href === "/explore"
-      ? section === "culture"
+      ? section === "culture" && !pathname.startsWith("/languages")
       : href === "/learn"
         ? pathname.startsWith("/learn")
         : pathname === href || pathname.startsWith(`${href}/`);
@@ -118,7 +122,8 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pt-20 pb-32 md:px-8">
+      {/* Home is laid out as three columns and uses the full width; every other screen stays narrow. */}
+      <main className={`mx-auto flex w-full flex-1 flex-col px-4 pt-20 pb-32 md:px-8 ${pathname === "/today" ? "max-w-[92rem]" : "max-w-5xl"}`}>
         <ScreenTransition>{children}</ScreenTransition>
       </main>
 

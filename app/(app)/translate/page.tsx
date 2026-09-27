@@ -111,8 +111,19 @@ export default async function TranslatePage({ searchParams }: PageProps<"/transl
                   <p className="text-muted">{result.example.meaning}</p>
                 </blockquote>
               )}
-              {result.confidence === "ai_suggested" && (
-                <p className="text-sm text-muted">This entry has not been checked by a speaker yet. Treat it as a suggestion.</p>
+              {result.engine === "graph" && result.confidence !== "verified" && (
+                <p className="text-sm text-muted">
+                  {word?.source ? (
+                    <>
+                      From{" "}
+                      <a href={word.source.url} target="_blank" rel="noreferrer noopener" className="font-medium text-accent hover:underline">
+                        {word.source.title}
+                      </a>{" "}
+                      ({word.source.license}).{" "}
+                    </>
+                  ) : null}
+                  This entry has not been checked by a speaker yet. Treat it as a suggestion.
+                </p>
               )}
               {result.engine === "wiktionary" && (
                 <p className="rounded-[var(--radius-control)] bg-[var(--glass-inset-bg)] px-3 py-2 text-sm text-muted">
@@ -133,6 +144,13 @@ export default async function TranslatePage({ searchParams }: PageProps<"/transl
                   Our word graph has no entry for this yet, so this came from Google Translate. It is machine output,
                   not a checked {nameOf(to)} translation — useful for the gist, not for a name, a proverb or anything
                   you need to get right.
+                </p>
+              )}
+              {result.engine === "nllb" && (
+                <p className="rounded-[var(--radius-control)] bg-[var(--glass-inset-bg)] px-3 py-2 text-sm text-muted">
+                  Our word graph has no entry for this yet, so this came from NLLB-200, Meta&apos;s open machine
+                  translator ({result.license}). It is machine output, not a checked {nameOf(to)} translation — useful
+                  for the gist, not for anything you need to get right.
                 </p>
               )}
               {word && (

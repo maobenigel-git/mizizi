@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
-import { getCourse } from "@/lib/lessons/orientation";
+import { listLevels } from "@/lib/lessons/levels";
 
+/** The course's levels, in order: number, title, summary and exercise kinds. No answers. */
 export async function GET(_req: NextRequest, ctx: RouteContext<"/api/languages/[id]/lessons">) {
   const { id } = await ctx.params;
-  return Response.json(getCourse(id).map(({ id, slug, title, summary }) => ({ id, slug, title, summary })));
+  return Response.json(await listLevels(id));
 }

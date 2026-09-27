@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CharacterImage } from "@/components/assets/CharacterImage";
-import { FeatureGrid } from "@/components/shell/FeatureGrid";
 import { FlameIcon } from "@/components/shell/StreakFlame";
 import { WeekStrip } from "@/components/shell/WeekStrip";
 import { DailyGoal } from "@/components/today/DailyGoal";
+import { FeatureRail } from "@/components/today/FeatureRail";
 import { WordOfDayCard } from "@/components/today/WordOfDayCard";
 import { wordOfDay } from "@/data/seed/word-of-day";
 import { characterFor } from "@/lib/assets";
 import { getLanguage } from "@/lib/db/languages";
-import { suggestLesson } from "@/lib/lessons/orientation";
+import { learnerPath } from "@/lib/lessons/progress";
 import { getSession } from "@/lib/session";
 import { localDate, localHour } from "@/lib/session/streak";
 import { DAILY_LESSON_GOAL } from "@/lib/session/types";
@@ -27,90 +27,110 @@ export default async function TodayPage() {
   const dayIndex = Math.floor(Date.parse(today) / 86_400_000);
 
   const language = session.languageId ? await getLanguage(session.languageId) : undefined;
-  const suggestion = language ? suggestLesson(language.id, session.completedLessons, dayIndex) : undefined;
+  const path = language ? await learnerPath(session, language.id) : undefined;
+  // The next level; once every level is done, a rotating one to review.
+  const allDone = path !== undefined && path.total > 0 && path.completedCount === path.total;
+  const suggested = path?.levels[(allDone ? dayIndex % path.total : path.current - 1)];
+  const suggestion = suggested ? { level: suggested, review: allDone } : undefined;
   const word = wordOfDay(language?.id, dayIndex);
   const wordLanguage = await getLanguage(word.languageId);
   const lessonsToday = session.activity[today] ?? 0;
   const activeToday = session.streak.lastActivityDate === today;
-  const isNew = session.completedLessons.length === 0;
+  const isNew = (path?.completedCount ?? 0) === 0;
 
+  const hill = (
+    <svg aria-hidden viewBox="0 0 400 120" preserveAspectRatio="none" className="pointer-events-none absolute -bottom-px right-0 h-20 w-1/2">
+      <path d="M0 120 C 140 90, 260 50, 400 40 L 400 120 Z" fill="var(--forest)" opacity="0.85" />
+    </svg>
+  );
+
+  /*
+   * Three columns on wide screens — explore rail · the day · streak — as in
+   * the design. Phones get the day first, then the streak, then the rail.
+   */
   return (
-    <div className="space-y-6">
-      <header className="w-fit rounded-2xl bg-background/85 px-4 py-3 backdrop-blur-sm">
-        <p className="text-sm text-muted">
-          {new Intl.DateTimeFormat("en-KE", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Nairobi" }).format(new Date())}
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {isNew ? "Karibu" : greeting(localHour())}, {session.displayName.split(" ")[0]}
-        </h1>
-        {isNew && language && (
-          <p className="mt-1 text-muted">
-            You&apos;re set up to learn {language.name}. Start your first lesson, or explore anything below.
+    <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)_11rem] lg:gap-10">
+      <div className="order-1 space-y-5 lg:order-2">
+        <header>
+          <p className="text-sm text-muted">
+            {new Intl.DateTimeFormat("en-KE", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Nairobi" }).format(new Date())}
           </p>
-        )}
-      </header>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {isNew ? "Karibu" : greeting(localHour())}, {session.displayName.split(" ")[0]}
+          </h1>
+          {isNew && language && (
+            <p className="mt-1">You&apos;re set up to learn {language.name}. Start your first lesson, or explore anything below.</p>
+          )}
+        </header>
 
-      <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         {suggestion && language && (
-          <section className="relative flex flex-col justify-between gap-6 overflow-hidden rounded-2xl bg-accent-solid p-6 text-white lg:row-span-2">
+          <section className="relative flex min-h-72 flex-col justify-between gap-6 overflow-hidden rounded-[var(--radius-panel)] bg-[image:var(--hero-gradient)] p-6 text-[var(--on-hero)] shadow-[0_22px_44px_-20px_var(--red)] sm:p-7">
+            {hill}
             <CharacterImage
               src={characterFor(language.id)}
               name={`${language.name} character`}
-              className="pointer-events-none absolute -bottom-2 right-2 h-[85%] max-w-[45%]"
+              className="pointer-events-none absolute -bottom-1 right-4 h-[92%] max-w-[40%]"
             />
             <div className="relative max-w-[60%] space-y-2">
-              <p className="text-sm text-white/75">
+              <p className="text-sm font-medium text-[var(--on-hero)]/80">
                 {isNew ? "Your first lesson" : suggestion.review ? "Today's review" : lessonsToday > 0 ? "Up next" : "Today's lesson"} · {language.name}
               </p>
-              <h2 className="text-2xl font-semibold tracking-tight">{suggestion.lesson.title}</h2>
-              <p className="text-white/85">{suggestion.lesson.summary}</p>
+              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                <span className="block text-sm font-medium text-[var(--on-hero)]/75">Level {suggestion.level.number}</span>
+                {suggestion.level.title}
+              </h2>
+              <p className="text-[var(--on-hero)]/85">{suggestion.level.summary}</p>
             </div>
             <div className="relative flex flex-wrap items-center gap-4">
               <Link
-                href={`/learn/${suggestion.lesson.slug}`}
-                className="rounded-xl bg-white px-6 py-3 font-semibold text-ocean-dark transition-transform duration-200 ease-out hover:scale-[1.02]"
+                href={`/learn/${suggestion.level.number}`}
+                className="press rounded-[var(--radius-control)] bg-white px-6 py-3 font-semibold text-forest shadow-[0_8px_20px_-10px_rgb(61_21_8/0.5)] transition-transform duration-200 ease-out hover:scale-[1.02]"
               >
-                {session.completedLessons.length > 0 ? "Continue" : "Start"}
+                {isNew ? "Start" : "Continue"}
               </Link>
-              <Link href="/learn" className="text-sm text-white/85 underline-offset-4 hover:underline">
+              <Link href="/learn" className="text-sm font-medium text-[var(--on-hero)] underline-offset-4 hover:underline">
                 See your path
               </Link>
             </div>
           </section>
         )}
 
-        <section className="glass space-y-4 p-5">
-          <div className="flex items-center gap-3">
-            <FlameIcon className={`h-10 w-10 ${activeToday ? "text-gold" : "text-border"}`} />
-            <div>
-              <p className="text-2xl font-semibold leading-tight">{session.streak.current}-day streak</p>
-              <p className="text-sm text-muted">
-                {activeToday ? "You've practised today." : "Complete a lesson to extend it."}
-                {session.streak.freezes > 0 && ` ${session.streak.freezes} freeze${session.streak.freezes > 1 ? "s" : ""} banked.`}
-              </p>
-            </div>
+        <section className="relative overflow-hidden rounded-[var(--radius-panel)] bg-[image:var(--hero-gradient)] p-6 text-[var(--on-hero)] shadow-[0_18px_40px_-20px_var(--red)]">
+          {hill}
+          <div className="relative">
+            <DailyGoal done={lessonsToday} goal={DAILY_LESSON_GOAL} onHero />
           </div>
-          <WeekStrip activity={session.activity} today={today} />
         </section>
 
-        <section className="glass p-5">
-          <DailyGoal done={lessonsToday} goal={DAILY_LESSON_GOAL} />
-        </section>
+        {/* Until it is dismissed, today's word is shown by the popup instead. */}
+        {session.wotdSeen === today && (
+          <WordOfDayCard
+            word={word}
+            languageName={wordLanguage?.name ?? word.languageId}
+            saved={session.notebook.some((e) => e.id === word.id)}
+          />
+        )}
       </div>
 
-      <section className="space-y-3">
-        <h2 className="w-fit rounded-xl bg-background/85 px-3 py-1 text-lg font-semibold backdrop-blur-sm">Explore Mizizi</h2>
-        <FeatureGrid />
-      </section>
+      <aside aria-label="Your streak" className="order-2 space-y-4 lg:order-3 lg:pt-32">
+        <div className="flex items-start gap-3">
+          <FlameIcon className={`h-10 w-10 shrink-0 ${activeToday || session.streak.current > 0 ? "text-gold" : "text-border"}`} />
+          <div>
+            <p className="text-xl font-semibold leading-tight">{session.streak.current}-day streak</p>
+            <p className="text-sm">
+              {activeToday ? "You've practised today." : "Complete a lesson to extend it."}
+              {session.streak.freezes > 0 && ` ${session.streak.freezes} freeze${session.streak.freezes > 1 ? "s" : ""} banked.`}
+            </p>
+          </div>
+        </div>
+        <div className="lg:pl-1">
+          <WeekStrip activity={session.activity} today={today} vertical />
+        </div>
+      </aside>
 
-      {/* Until it is dismissed, today's word is shown by the popup instead. */}
-      {session.wotdSeen === today && (
-        <WordOfDayCard
-          word={word}
-          languageName={wordLanguage?.name ?? word.languageId}
-          saved={session.notebook.some((e) => e.id === word.id)}
-        />
-      )}
+      <div className="order-3 lg:order-1">
+        <FeatureRail />
+      </div>
     </div>
   );
 }

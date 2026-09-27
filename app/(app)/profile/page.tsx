@@ -7,10 +7,12 @@ import { WeekStrip } from "@/components/shell/WeekStrip";
 import { counties } from "@/data/seed/counties";
 import { countSubmissions } from "@/lib/db/contributions";
 import { getLanguage, listLanguages } from "@/lib/db/languages";
-import { getCourse } from "@/lib/lessons/orientation";
+import { countCompleted } from "@/lib/db/progress";
+import { listLevels } from "@/lib/lessons/levels";
+import { learnerPath } from "@/lib/lessons/progress";
 import { getSession } from "@/lib/session";
 import { getAchievements } from "@/lib/session/achievements";
-import { resetSession, updateProfile } from "@/lib/session/actions";
+import { resetSession, signOut, updateProfile } from "@/lib/session/actions";
 import { localDate } from "@/lib/session/streak";
 import type { AvatarColor } from "@/lib/session/types";
 
@@ -23,19 +25,32 @@ const field =
 export default async function ProfilePage({ searchParams }: PageProps<"/profile">) {
   const [{ saved }, session, languages] = await Promise.all([searchParams, getSession(), listLanguages()]);
   const language = session.languageId ? await getLanguage(session.languageId) : undefined;
-  const course = language ? getCourse(language.id) : [];
-  const courseDone = course.filter((l) => session.completedLessons.includes(l.id)).length;
+  // Imports any pre-levels progress for the current language before counting.
+  const path = language ? await learnerPath(session, language.id) : undefined;
+  const completedByLanguage = session.userId ? await countCompleted(session.userId) : {};
+  const lessonsDone = Object.values(completedByLanguage).reduce((a, b) => a + b, 0);
   const contributions = session.userId ? await countSubmissions(session.userId) : 0;
-  const achievements = getAchievements(session, course.length, contributions);
+  const achievements = getAchievements(
+    session,
+    { lessonsDone, courseDone: path?.completedCount ?? 0, courseLength: path?.total ?? 0 },
+    contributions,
+  );
 
   // Every language the learner has started, for the "Your courses" list.
-  const started = [...new Set(session.completedLessons.map((id) => id.split(":")[0]))];
-  const courses = (await Promise.all([...new Set([...(language ? [language.id] : []), ...started])].map(getLanguage))).filter((l) => l !== undefined);
+  const courseIds = [...new Set([...(language ? [language.id] : []), ...Object.keys(completedByLanguage)])];
+  const courses = (
+    await Promise.all(
+      courseIds.map(async (id) => {
+        const [l, levels] = await Promise.all([getLanguage(id), listLevels(id)]);
+        return l ? { language: l, total: levels.length, done: completedByLanguage[id] ?? 0 } : undefined;
+      }),
+    )
+  ).filter((c) => c !== undefined);
 
   const stats = [
     { label: "Day streak", value: session.streak.current, flame: true },
     { label: "Total XP", value: session.xp },
-    { label: "Lessons done", value: session.completedLessons.length },
+    { label: "Levels done", value: lessonsDone },
     { label: "Longest streak", value: session.streak.longest },
     { label: "Streak freezes", value: session.streak.freezes },
     { label: "Words saved", value: session.notebook.length },
@@ -92,29 +107,25 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Your courses</h2>
         <ul className="space-y-3">
-          {courses.map((l) => {
-            const lessons = getCourse(l.id);
-            const done = lessons.filter((x) => session.completedLessons.includes(x.id)).length;
-            return (
-              <li key={l.id} className="glass p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold">
-                    {l.name}
-                    {l.id === language?.id && <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">Current</span>}
-                  </p>
-                  <p className="text-sm text-muted">
-                    {done} of {lessons.length} lessons
-                  </p>
-                </div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-border">
-                  <div className="h-full rounded-full bg-forest" style={{ width: `${(done / Math.max(lessons.length, 1)) * 100}%` }} />
-                </div>
-              </li>
-            );
-          })}
+          {courses.map(({ language: l, total, done }) => (
+            <li key={l.id} className="glass p-5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold">
+                  {l.name}
+                  {l.id === language?.id && <span className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">Current</span>}
+                </p>
+                <p className="text-sm text-muted">
+                  {done} of {total} levels
+                </p>
+              </div>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-border">
+                <div className="h-full rounded-full bg-forest" style={{ width: `${(done / Math.max(total, 1)) * 100}%` }} />
+              </div>
+            </li>
+          ))}
         </ul>
         <Link href="/learn" className="inline-block text-sm font-medium text-accent hover:underline">
-          {courseDone === 0 ? "Start your first lesson →" : "Continue learning →"}
+          {(path?.completedCount ?? 0) === 0 ? "Start your first level →" : "Continue learning →"}
         </Link>
       </section>
 
@@ -206,13 +217,31 @@ export default async function ProfilePage({ searchParams }: PageProps<"/profile"
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Account</h2>
-        <div className="glass space-y-3 p-5">
-          {session.contact && <p className="text-sm text-muted">Signed up with {session.contact}</p>}
-          <form action={resetSession}>
-            <button type="submit" className="rounded-xl border border-border px-5 py-2.5 text-sm text-muted transition-colors duration-200 ease-out hover:border-red hover:text-red">
-              Sign out and reset progress
-            </button>
-          </form>
+        <div className="glass space-y-4 p-5">
+          {session.accountId ? (
+            <p className="text-sm text-muted">
+              Signed in as <span className="font-medium text-foreground">{session.contact}</span>. Your progress is saved to
+              your account.
+            </p>
+          ) : (
+            <p className="text-sm text-muted">
+              Your progress is kept on this device only. Signing out resets it.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3">
+            {session.accountId && (
+              <form action={signOut}>
+                <button type="submit" className="press rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors duration-200 ease-out hover:border-accent hover:text-accent">
+                  Sign out
+                </button>
+              </form>
+            )}
+            <form action={resetSession}>
+              <button type="submit" className="press rounded-xl border border-border px-5 py-2.5 text-sm text-muted transition-colors duration-200 ease-out hover:border-red hover:text-red">
+                {session.accountId ? "Reset all progress" : "Sign out and reset progress"}
+              </button>
+            </form>
+          </div>
         </div>
       </section>
     </div>

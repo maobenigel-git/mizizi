@@ -1,10 +1,17 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { saveState } from "@/lib/db/accounts";
+import { withMockProgress } from "./mock";
+import { sign, unsign } from "./sign";
 import { settleStreak, localDate } from "./streak";
 import { COOKIE_SESSION, emptySession, SKIP_ONBOARDING, type Session } from "./types";
 
-// Session state lives in an httpOnly cookie until auth + Postgres are wired up.
-// Everything reads and writes through here, so the swap to `onboarding_profiles`,
+// Session state lives in a signed, httpOnly cookie (./sign). For a learner with
+// an account, every save is also written to lib/db/accounts, which is what
+// signing in on another device restores. The cookie stays the source of truth
+// on this device, so a page render never waits on the database.
+//
+// Everything reads and writes through here, so the eventual move to
 // `user_streaks`, `user_progress` etc. stays inside this folder.
 
 export const cookieOptions = {
@@ -18,16 +25,9 @@ export const cookieOptions = {
 export async function getSession(): Promise<Session> {
   const raw = (await cookies()).get(COOKIE_SESSION)?.value;
   let session = emptySession;
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      session = { ...emptySession, ...parsed };
-      // A hand-edited or truncated cookie must not make .map() throw on render.
-      if (!Array.isArray(session.notebook)) session.notebook = [];
-    } catch {
-      // corrupt cookie: fall back to an empty session
-    }
-  }
+  // An unsigned, altered or corrupt cookie reads as an empty session.
+  const parsed = raw ? unsign(raw) : undefined;
+  if (parsed && typeof parsed === "object") session = restore(parsed);
   // With the onboarding gate skipped nothing has chosen a language, and the
   // screens behind it all key off one. Supply a development default so they
   // render as they would for a real learner.
@@ -37,7 +37,23 @@ export async function getSession(): Promise<Session> {
     // checked without walking onboarding for each one.
     session = { ...session, languageId: process.env.DEV_LANGUAGE || "kiswahili", level: "beginner" };
   }
-  return { ...session, streak: settleStreak(session.streak, localDate()) };
+  const today = localDate();
+  // Development-only sample progress, applied last so it sees the language
+  // default above. A no-op unless DEV_MOCK_STREAK is on and nothing has been
+  // done in this session yet — see lib/session/mock.
+  session = withMockProgress(session, today);
+  return { ...session, streak: settleStreak(session.streak, today) };
+}
+
+/** Fills defaults, and guards the fields render code maps over. */
+export function restore(stored: object): Session {
+  const session: Session = { ...emptySession, ...stored };
+  if (!Array.isArray(session.notebook)) session.notebook = [];
+  if (!Array.isArray(session.completedLessons)) session.completedLessons = [];
+  if (!Array.isArray(session.interests)) session.interests = [];
+  if (!session.activity || typeof session.activity !== "object") session.activity = {};
+  if (!session.streak || typeof session.streak !== "object") session.streak = emptySession.streak;
+  return session;
 }
 
 /*
@@ -52,7 +68,7 @@ export async function getSession(): Promise<Session> {
  */
 const COOKIE_BUDGET = 3500;
 
-const sizeOf = (session: Session) => Buffer.byteLength(encodeURIComponent(JSON.stringify(session)), "utf8");
+const sizeOf = (session: Session) => sign(session).length;
 
 export function trimToFit(session: Session): Session {
   let trimmed = session;
@@ -72,5 +88,7 @@ export function trimToFit(session: Session): Session {
 
 /** Only callable from Server Actions and Route Handlers. */
 export async function saveSession(session: Session): Promise<void> {
-  (await cookies()).set(COOKIE_SESSION, JSON.stringify(trimToFit(session)), cookieOptions);
+  const trimmed = trimToFit(session);
+  (await cookies()).set(COOKIE_SESSION, sign(trimmed), cookieOptions);
+  if (trimmed.accountId) await saveState(trimmed.accountId, trimmed);
 }

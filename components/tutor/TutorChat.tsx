@@ -36,7 +36,11 @@ export function TutorChat({
   const [notice, setNotice] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns, pending]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an
+  // effect that returns anything but a function crashes the component.
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns, pending]);
 
   async function send(text: string) {
     const content = text.trim();

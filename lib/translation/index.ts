@@ -2,6 +2,7 @@ import { listVocabulary } from "@/lib/db/vocabulary";
 import type { ConfidenceTier } from "@/types";
 import { ENGLISH } from "./codes";
 import { googleSupports, googleTranslate } from "./google";
+import { nllbSupports, nllbTranslate } from "./nllb";
 import { WIKTIONARY_LICENSE, wiktionarySupports, wiktionaryTranslate } from "./wiktionary";
 
 // Translation over the shared-concept graph (docs/spec.md §1.8): a term resolves
@@ -15,6 +16,8 @@ import { WIKTIONARY_LICENSE, wiktionarySupports, wiktionaryTranslate } from "./w
 //               single English words only, but reaches twenty-odd languages
 //   Google      machine output -> `machine_generated`
 //               four languages, but handles whole sentences
+//   NLLB-200    machine output -> `machine_generated` (./nllb, optional)
+//               adds Gikuyu and Kamba sentences; only with NLLB_ENDPOINT_URL
 //
 // Wiktionary goes first because a curated dictionary entry beats machine
 // output. Neither is ever promoted to a verified translation, both carry an
@@ -41,7 +44,7 @@ export type TranslationResult = {
   confidence: ConfidenceTier;
   example?: { text: string; meaning: string };
   /** Which system produced `text`. Absent when there is no translation. */
-  engine?: "graph" | "wiktionary" | "google";
+  engine?: "graph" | "wiktionary" | "google" | "nllb";
   /** Licence that must be shown with `text`, where the source requires one. */
   license?: string;
 };
@@ -60,7 +63,7 @@ export async function translate(query: string, from: string, to: string): Promis
   if (!source) return machineFallback(query, from, to, miss);
 
   if (to === ENGLISH) {
-    return { ...miss, conceptId: source.conceptId, text: source.meaning, confidence: tierOf(source.verified), engine: "graph" };
+    return { ...miss, conceptId: source.conceptId, text: source.meaning, confidence: tierOf(source), engine: "graph" };
   }
   const target = words.find((w) => w.conceptId === source.conceptId && w.languageId === to);
   // The concept is known but this language has no term for it yet.
@@ -70,7 +73,7 @@ export async function translate(query: string, from: string, to: string): Promis
     ...miss,
     conceptId: target.conceptId,
     text: target.term,
-    confidence: tierOf(target.verified && source.verified),
+    confidence: tierOf(target),
     ...(target.example && target.exampleMeaning
       ? { example: { text: target.example, meaning: target.exampleMeaning } }
       : {}),
@@ -90,12 +93,18 @@ async function machineFallback(
     return { ...miss, text: curated, confidence: "corpus_supported", engine: "wiktionary", license: WIKTIONARY_LICENSE };
   }
   const machine = await googleTranslate(query, from, to);
-  return machine ? { ...miss, text: machine, confidence: "machine_generated", engine: "google" } : miss;
+  if (machine) return { ...miss, text: machine, confidence: "machine_generated", engine: "google" };
+  // Last: NLLB-200, the only engine here with Gikuyu and Kamba sentences.
+  const nllb = await nllbTranslate(query, from, to);
+  return nllb ? { ...miss, text: nllb, confidence: "machine_generated", engine: "nllb", license: NLLB_LICENSE } : miss;
 }
+
+/** Shown with every NLLB translation: the model's own licence. */
+export const NLLB_LICENSE = "CC BY-NC 4.0";
 
 /** True when any outside source covers the pair, so the UI can say why it is empty. */
 export function machineTranslationAvailable(from: string, to: string): boolean {
-  return (googleSupports(from) && googleSupports(to)) || wiktionarySupports(to);
+  return (googleSupports(from) && googleSupports(to)) || (nllbSupports(from) && nllbSupports(to)) || wiktionarySupports(to);
 }
 
 /** Every language an outside source can translate into, for the UI to badge. */
@@ -106,7 +115,13 @@ export function outsideSourcesFor(languageId: string): ("wiktionary" | "google")
   return sources;
 }
 
-/** Seed entries were drafted by an AI and not yet checked, so they rank lowest. */
-function tierOf(verified: boolean): ConfidenceTier {
-  return verified ? "verified" : "ai_suggested";
+/*
+ * The tier of the word actually returned. Unchecked seed entries split by
+ * provenance: one read off a cited dictionary ranks as that dictionary does
+ * when asked live (`corpus_supported`); one with no source was drafted by an
+ * AI and ranks lowest.
+ */
+function tierOf(word: { verified: boolean; source?: unknown }): ConfidenceTier {
+  if (word.verified) return "verified";
+  return word.source ? "corpus_supported" : "ai_suggested";
 }

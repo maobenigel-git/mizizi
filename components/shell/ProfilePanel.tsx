@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { resetSession } from "@/lib/session/actions";
+import { resetSession, signOut } from "@/lib/session/actions";
 import type { ShellProfile } from "./AppShell";
 import { Avatar } from "./Avatar";
 import { WeekStrip } from "./WeekStrip";
@@ -83,9 +83,11 @@ export function ProfilePanel({ profile, onClose }: { profile: ShellProfile; onCl
           ))}
         </nav>
 
-        <form action={resetSession} className="mt-auto">
-          <button type="submit" className="w-full rounded-lg border border-border px-4 py-2.5 text-sm text-muted transition-colors duration-200 ease-out hover:border-red hover:text-red">
-            Sign out and reset progress
+        {/* Without an account there is nothing to sign back in to, so the only
+            honest option is a reset — and it says so. */}
+        <form action={profile.hasAccount ? signOut : resetSession} className="mt-auto">
+          <button type="submit" className="press w-full rounded-lg border border-border px-4 py-2.5 text-sm text-muted transition-colors duration-200 ease-out hover:border-red hover:text-red">
+            {profile.hasAccount ? "Sign out" : "Sign out and reset progress"}
           </button>
         </form>
       </aside>

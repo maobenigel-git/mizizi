@@ -1,5 +1,4 @@
 import "server-only";
-import postgres from "postgres";
 import { NOTE_MAX_LENGTH } from "@/lib/session/types";
 
 /*
@@ -31,8 +30,8 @@ export type Note = {
 export { NOTE_MAX_LENGTH };
 export const NOTES_LIMIT = 200;
 
-const sql = process.env.DATABASE_URL ? postgres(process.env.DATABASE_URL, { prepare: false }) : undefined;
-const memory: Note[] = [];
+import { memoryStore, sql } from "./client";
+const memory = memoryStore<Note[]>("notes", () => []);
 
 export const notesPersisted = Boolean(sql);
 

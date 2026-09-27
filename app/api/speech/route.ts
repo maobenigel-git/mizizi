@@ -1,3 +1,5 @@
+import { getLanguage } from "@/lib/db/languages";
+import { mmsSynthesize } from "@/lib/speech/mms-client";
 import { ttsCodeFor } from "@/lib/speech/voices";
 
 /*
@@ -28,6 +30,15 @@ export async function GET(request: Request) {
   }
   const code = ttsCodeFor(language);
   if (!code) {
+    // No Google voice: try an MMS voice on the self-hosted speech server
+    // (Gikuyu and others), still a machine voice and labelled as one.
+    const iso = (await getLanguage(language))?.iso639_3;
+    const wav = iso ? await mmsSynthesize(text, iso) : undefined;
+    if (wav) {
+      return new Response(wav, {
+        headers: { "Content-Type": "audio/wav", "Cache-Control": "public, max-age=86400, s-maxage=604800, immutable" },
+      });
+    }
     // The client falls back to the browser's own synthesiser on this.
     return Response.json(
       { error: "no_voice", message: "No machine voice is available for this language." },

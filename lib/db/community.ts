@@ -1,5 +1,4 @@
 import "server-only";
-import postgres from "postgres";
 
 // Discovery directory (docs/spec.md §2.5, phase 1): read-only, opt-in, and no
 // messaging. Members are matched on language pair, county and interest tags —
@@ -20,8 +19,8 @@ export type Member = {
   interests: string[];
 };
 
-const sql = process.env.DATABASE_URL ? postgres(process.env.DATABASE_URL, { prepare: false }) : undefined;
-const memory = new Map<string, Member>();
+import { memoryStore, sql } from "./client";
+const memory = memoryStore("community", () => new Map<string, Member>());
 
 const regionId = (county?: string) => county?.toLowerCase().replace(/[^a-z]+/g, "-") ?? null;
 

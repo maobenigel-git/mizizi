@@ -1,6 +1,5 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import postgres from "postgres";
 import { languages } from "@/data/languages/registry";
 import { seedWords } from "@/data/seed/word-of-day";
 
@@ -77,8 +76,8 @@ export function listTasks(languageId?: string): ContributionTask[] {
   return languageId ? tasks.filter((t) => t.languageId === languageId) : tasks;
 }
 
-const sql = process.env.DATABASE_URL ? postgres(process.env.DATABASE_URL, { prepare: false }) : undefined;
-const memory: Submission[] = [];
+import { memoryStore, sql } from "./client";
+const memory = memoryStore<Submission[]>("contributions", () => []);
 
 export const contributionsPersisted = Boolean(sql);
 

@@ -1,54 +1,70 @@
 @import "tailwindcss";
 
 /*
- * Palette
+ * Palette — the Mizizi brand colours: #316e38 · #992800 · #d34a24 · #ffaf00
+ *
+ * Token names are roles, kept from before the brand palette (they are also
+ * stored as avatar choices, so renaming would break saved data):
+ *
  *   white / black — base background and text
- *   ocean  — learning / progression UI
- *   earth  — culture / heritage / community UI
- *   forest — success, correct answers, progress
- *   red    — errors, wrong answers, destructive actions
- *   gold   — streaks, XP, achievements only (small accent, docs/spec.md §2.3)
+ *   ocean  — learning / progression UI            brand green  #316e38
+ *   earth  — culture / heritage / community UI    deep rust    #992800
+ *   forest — success, correct answers, progress   brand green  #316e38
+ *   red    — errors, wrong answers, destructive   ember        #d34a24
+ *   gold   — streaks, XP, achievements only       amber        #ffaf00
+ *            (small accent, docs/spec.md §2.3)
  *
  * --accent follows the section: ocean by default, earth inside
  * [data-section="culture"]. Build section UI with "accent", not a fixed colour.
  */
 :root {
-  --ocean: #1b6ca8;
-  --ocean-dark: #0d3b54;
-  --earth: #a8552e;
-  --gold: #e0a93a;
-  --forest: #1e6b3a;
-  --red: #c0392b;
-  --background: #ffffff;
-  --surface: #fafafa;
-  --foreground: #111111;
-  --muted: #555555;
-  --border: #e4e4e4;
+  --ocean: #316e38;
+  --ocean-dark: #1c3d20;
+  --earth: #992800;
+  --gold: #ffaf00;
+  --forest: #316e38;
+  --red: #d34a24;
+  /* Warm cream page, deep rust-brown text (the UI inspiration). */
+  --background: #fffcf7;
+  --surface: #fbf6ee;
+  --foreground: #3d1508;
+  --muted: #7a5645;
+  --border: #eadccb;
+  /* Soft amber light in the page corners; transparent in dark mode. */
+  --page-glow: rgb(255 175 0 / 0.14);
+  --page-glow-2: rgb(211 74 36 / 0.07);
   --accent: var(--ocean);
   color-scheme: light;
   /* Filled buttons and panels with white text: same in light and dark. */
-  --accent-solid: #1b6ca8;
+  --accent-solid: #316e38;
+  /* The warm hero card (amber → ember) and the dark text that sits on it.
+     Identical in both themes: the card carries its own light. */
+  --hero-gradient: linear-gradient(120deg, #ffaf00 0%, #f08a1c 45%, #d34a24 100%);
+  --on-hero: #3d1508;
 }
 
 /* White is the default. Dark is opt-in via <html data-theme="dark">,
    not tied to the OS setting. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ocean: #5aa3d9;
-  --earth: #d17f57;
-  --gold: #e9b95a;
-  --forest: #5fb37c;
-  --red: #ef6a5b;
-  --background: #0d3b54;
-  --surface: #124864;
+  /* Lightened brand colours, readable on the deep green-black background. */
+  --ocean: #6fbf78;
+  --earth: #e0784f;
+  --gold: #ffc233;
+  --forest: #6fbf78;
+  --red: #f07a58;
+  --background: #10241a;
+  --surface: #16301f;
   --foreground: #f3ede4;
-  --muted: #b5c4cf;
-  --border: #1f5a78;
+  --muted: #b9c7bb;
+  --border: #264a31;
+  --page-glow: transparent;
+  --page-glow-2: transparent;
 }
 
 [data-section="culture"] {
   --accent: var(--earth);
-  --accent-solid: #a8552e;
+  --accent-solid: #992800;
 }
 
 @theme inline {
@@ -74,15 +90,31 @@
   --animate-sheet-in: sheet-in 250ms ease-out both;
   --animate-fade-in: fade-in 200ms ease-out both;
   --animate-popup-in: popup-in 250ms ease-out both;
+  /* Lesson path: the current level's halo, and a level opening. */
+  --animate-breathe: breathe 2800ms ease-out infinite;
+  --animate-unlock: unlock 300ms ease-out both;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(60rem 40rem at 100% 100%, var(--page-glow), transparent 70%),
+    radial-gradient(50rem 30rem at 100% 0%, var(--page-glow-2), transparent 70%),
+    radial-gradient(40rem 30rem at 0% 60%, var(--page-glow-2), transparent 70%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
 }
 
 /* ── Motion (docs/spec.md §2.6): 150–300ms, ease-out, no bounce ── */
 
+@keyframes breathe {
+  from { transform: scale(1); opacity: 0.45; }
+  to { transform: scale(1.45); opacity: 0; }
+}
+@keyframes unlock {
+  from { transform: scale(0.85); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
 @keyframes pop {
   from { transform: scale(0.85); opacity: 0.6; }
   to { transform: scale(1); opacity: 1; }
@@ -178,12 +210,12 @@ body {
  */
 :root {
   --glass-blur: 18px;
-  --glass-bg: rgb(255 255 255 / 0.62);
-  --glass-solid: #fbfbfc;
-  --glass-border: rgb(255 255 255 / 0.75);
-  --glass-edge: rgb(17 17 17 / 0.07);
-  --glass-shadow: 0 1px 2px rgb(17 17 17 / 0.04), 0 12px 32px -12px rgb(17 17 17 / 0.16);
-  --glass-inset-bg: rgb(255 255 255 / 0.55);
+  --glass-bg: rgb(255 253 249 / 0.7);
+  --glass-solid: #fffdf9;
+  --glass-border: rgb(255 255 255 / 0.8);
+  --glass-edge: rgb(120 60 20 / 0.1);
+  --glass-shadow: 0 1px 2px rgb(90 40 10 / 0.05), 0 14px 34px -14px rgb(120 60 20 / 0.22);
+  --glass-inset-bg: rgb(255 255 255 / 0.6);
   /* Accent text sitting ON a glass panel. Split from --accent because the
      panel tint eats contrast in dark mode and the plain accent drops to
      3.2:1 there — below AA for the small labels on the voice controls. */
@@ -195,19 +227,19 @@ body {
 }
 
 :root[data-theme="dark"] {
-  --glass-bg: rgb(18 72 100 / 0.55);
-  --glass-solid: #124864;
+  --glass-bg: rgb(22 48 31 / 0.55);
+  --glass-solid: #16301f;
   --glass-border: rgb(255 255 255 / 0.14);
   --glass-edge: rgb(255 255 255 / 0.12);
   --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 12px 32px -12px rgb(0 0 0 / 0.5);
   --glass-inset-bg: rgb(255 255 255 / 0.07);
-  /* Lightened ocean: 4.9:1 on the dark inset panel, vs 3.2:1 for --ocean. */
-  --accent-on-glass: #8fc8ef;
+  /* Lightened brand green for accent text on dark glass panels. */
+  --accent-on-glass: #8fd49a;
 }
 
-/* Lightened earth for the culture section, 5.0:1 on the same panel. */
+/* Lightened rust for the culture section on the same panels. */
 :root[data-theme="dark"] [data-section="culture"] {
-  --accent-on-glass: #f0b894;
+  --accent-on-glass: #f0a27f;
 }
 
 .glass,
@@ -232,7 +264,7 @@ body {
     --glass-blur: 28px;
   }
   :root[data-theme="dark"] .glass-strong {
-    --glass-bg: rgb(13 59 84 / 0.82);
+    --glass-bg: rgb(16 36 26 / 0.82);
   }
 }
 

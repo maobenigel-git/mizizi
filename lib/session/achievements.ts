@@ -12,15 +12,15 @@ export type Achievement = {
   unlocked: boolean;
 };
 
-export function getAchievements(session: Session, courseLength: number, contributions: number): Achievement[] {
-  const lessons = session.completedLessons.length;
-  const courseDone = session.languageId
-    ? session.completedLessons.filter((id) => id.startsWith(`${session.languageId}:`)).length
-    : 0;
-
+/** Level counts come from lib/db/progress; everything else from the session. */
+export function getAchievements(
+  session: Session,
+  { lessonsDone: lessons, courseDone, courseLength }: { lessonsDone: number; courseDone: number; courseLength: number },
+  contributions: number,
+): Achievement[] {
   const goals: [id: string, title: string, detail: string, have: number, need: number][] = [
-    ["first-lesson", "First steps", "Finish your first lesson", lessons, 1],
-    ["course", "Oriented", "Complete a language's orientation course", courseDone, Math.max(courseLength, 1)],
+    ["first-lesson", "First steps", "Finish your first level", lessons, 1],
+    ["course", "Path walker", "Complete every level of a language's path", courseDone, Math.max(courseLength, 1)],
     ["streak-3", "Warming up", "Reach a 3-day streak", session.streak.longest, 3],
     ["streak-7", "One week strong", "Reach a 7-day streak", session.streak.longest, 7],
     ["streak-30", "Monthly habit", "Reach a 30-day streak", session.streak.longest, 30],

@@ -136,6 +136,58 @@ export const seedWords: SeedWord[] = [
     source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/nyũmba", license: "CC BY-SA 4.0" },
     verified: false,
   },
+  /*
+   * Family and friends. Unlike the four above — which were read off
+   * translation tables — each of these was taken from its own Kikuyu entry on
+   * English Wiktionary, where the sense is sourced to a published dictionary
+   * (Benson 1964, Barlow 1960, Hinde 1904).
+   *
+   * `baba` and `cũcũ` are glossed there as "my father" and "my grandmother",
+   * not "father" and "grandmother": the possessive is part of the word. That
+   * is recorded as it stands rather than tidied into the bare English noun,
+   * and the `note` says so — trimming it would be inventing a claim about
+   * Gĩkũyũ that the source does not make.
+   */
+  {
+    id: "gikuyu:mwana",
+    languageId: "gikuyu",
+    term: "mwana",
+    conceptId: "CHILD",
+    meaning: "child",
+    note: "Plural: ciana.",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/mwana", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:murata",
+    languageId: "gikuyu",
+    term: "mũrata",
+    conceptId: "FRIEND",
+    meaning: "friend",
+    note: "Plural: arata. “Mũrata wakwa” is “my friend”.",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/mũrata", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:baba",
+    languageId: "gikuyu",
+    term: "baba",
+    conceptId: "MY_FATHER",
+    meaning: "my father",
+    note: "Wiktionary glosses this as “my father”, not “father” — the possessive is built in.",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/baba", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
+  {
+    id: "gikuyu:cucu",
+    languageId: "gikuyu",
+    term: "cũcũ",
+    conceptId: "MY_GRANDMOTHER",
+    meaning: "my grandmother",
+    note: "Glossed as “my grandmother”. Plural: macũcũ.",
+    source: { title: "English Wiktionary", url: "https://en.wiktionary.org/wiki/cũcũ", license: "CC BY-SA 4.0" },
+    verified: false,
+  },
 ];
 
 /** Prefers the learner's language; falls back to the whole pool. */

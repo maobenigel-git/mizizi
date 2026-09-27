@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { saveNote, type NoteResult } from "@/lib/session/actions";
-import { NOTE_MAX_LENGTH } from "@/lib/session/types";
+import { NOTE_MAX_LENGTH, type SavedNote } from "@/lib/session/types";
 
 /*
  * Note-taking inside a lesson.
@@ -13,9 +13,12 @@ import { NOTE_MAX_LENGTH } from "@/lib/session/types";
  *
  * `context` is whatever the learner was looking at when they opened it, which
  * is what makes the note readable later in the Notebook.
+ *
+ * Notes saved during this lesson are listed in the drawer from the action's
+ * result, because the lesson never re-fetches between steps.
  */
 
-const initial: NoteResult = { ok: true };
+type State = { error?: string };
 
 export function LessonNotes({ context, count }: { context?: string; count: number }) {
   const [open, setOpen] = useState(false);
@@ -23,16 +26,17 @@ export function LessonNotes({ context, count }: { context?: string; count: numbe
   // Stamped by the action, cleared by the timer below — never set from an
   // effect body, which would cascade a render on every save.
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saved, setSaved] = useState<SavedNote[]>([]);
   const field = useRef<HTMLTextAreaElement>(null);
 
-  const [result, formAction, pending] = useActionState(async (_prev: NoteResult, formData: FormData) => {
-    const outcome = await saveNote(formData);
-    if (outcome.ok) {
-      setText("");
-      setSavedAt(Date.now());
-    }
-    return outcome;
-  }, initial);
+  const [state, formAction, pending] = useActionState(async (_prev: State, formData: FormData): Promise<State> => {
+    const outcome: NoteResult = await saveNote(formData);
+    if (!outcome.ok) return { error: outcome.message };
+    setText("");
+    setSaved((notes) => [outcome.note, ...notes]);
+    setSavedAt(Date.now());
+    return {};
+  }, {});
 
   // Fade the confirmation rather than leaving it up.
   useEffect(() => {
@@ -60,8 +64,8 @@ export function LessonNotes({ context, count }: { context?: string; count: numbe
           <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>
         {open ? "Close notes" : "Take a note"}
-        {count > 0 && (
-          <span className="rounded-full bg-accent-solid px-1.5 text-[11px] font-medium text-white">{count}</span>
+        {count + saved.length > 0 && (
+          <span className="rounded-full bg-accent-solid px-1.5 text-[11px] font-medium text-white">{count + saved.length}</span>
         )}
       </button>
 
@@ -95,12 +99,23 @@ export function LessonNotes({ context, count }: { context?: string; count: numbe
           </form>
 
           <p role="status" aria-live="polite" className="min-h-4 text-xs">
-            {!result.ok ? (
-              <span className="text-red">{result.message}</span>
+            {state.error ? (
+              <span className="text-red">{state.error}</span>
             ) : savedAt !== null ? (
               <span className="text-forest">Saved to your notebook.</span>
             ) : null}
           </p>
+
+          {saved.length > 0 && (
+            <ul className="space-y-2" aria-label="Notes from this lesson">
+              {saved.map((note) => (
+                <li key={note.id} className="glass-inset px-3 py-2 text-sm">
+                  {note.context && <span className="block text-xs text-muted">{note.context}</span>}
+                  <span className="whitespace-pre-wrap">{note.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </>

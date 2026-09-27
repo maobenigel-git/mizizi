@@ -15,10 +15,15 @@ Non-negotiables from the spec:
 - Translations carry a confidence tier. AI output is never presented as a verified translation.
 - The frontend never calls the model directly; AI goes through `app/api/*` → `lib/ai`.
 - Literature licensing is separate from corpus licensing. No full text for copyrighted books.
-- Theme: white background, black text by default; dark is opt-in per device via the toggle in
-  the shell (`<html data-theme="dark">`), never from the OS setting. `ocean` for learning UI,
-  `earth` for culture/heritage/community (both via the `accent` token), `forest` for success,
-  `red` for errors, `gold` only for streaks/XP. 200–300ms ease-out transitions, no bounce.
+- Theme: warm cream background with soft amber page glow and deep rust-brown text by default
+  (`--background`, `--foreground`); the lesson hero uses `--hero-gradient` (amber → ember) with
+  `--on-hero` text. Dark is opt-in per device via the toggle in
+  the shell (`<html data-theme="dark">`), never from the OS setting. Brand palette:
+  `#316e38` green, `#992800` rust, `#d34a24` ember, `#ffaf00` amber — mapped onto role tokens in
+  `app/globals.css`: `ocean` (green) for learning UI, `earth` (rust) for culture/heritage/community
+  (both via the `accent` token), `forest` (green) for success, `red` (ember) for errors, `gold`
+  (amber) only for streaks/XP. Never hard-code hex colours in components. 200–300ms ease-out
+  transitions, no bounce.
 - Surfaces are glass: use the `.glass` / `.glass-strong` / `.glass-inset` classes from
   `app/globals.css` rather than `border border-border bg-surface`. Radii come from
   `--radius-panel` and `--radius-control`. Interactive controls get `.press`.

@@ -1,9 +1,14 @@
 import type { AvatarColor } from "@/lib/session/types";
 
+/*
+ * The four avatar choices, one per brand colour. The keys are stored in
+ * learners' sessions, so they keep their old names: with the brand palette
+ * "ocean" and "forest" are both green, so "forest" now shows the ember.
+ */
 export const avatarStyles: Record<AvatarColor, string> = {
   ocean: "bg-ocean",
   earth: "bg-earth",
-  forest: "bg-forest",
+  forest: "bg-red",
   deep: "bg-ocean-dark",
 };
 

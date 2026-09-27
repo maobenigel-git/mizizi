@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { THEME_KEY } from "@/lib/theme";
 
 /*
  * Light/dark switch. Dark is opt-in and remembered per device, never taken from
@@ -10,8 +11,6 @@ import { useSyncExternalStore } from "react";
  * The choice is applied by the inline script in app/layout.tsx before paint, so
  * this component only has to stay in sync with what is already on <html>.
  */
-
-export const THEME_KEY = "mizizi-theme";
 
 type Theme = "light" | "dark";
 

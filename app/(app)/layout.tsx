@@ -29,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         activity: session.activity,
         today,
         notebookCount: session.notebook.length,
+        hasAccount: Boolean(session.accountId),
       }}
       popup={
         session.wotdSeen !== today && (

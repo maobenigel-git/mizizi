@@ -83,3 +83,99 @@ export function scorePronunciation(heard: string, target: string): Pronunciation
     words,
   };
 }
+
+/*
+ * Word-by-word assessment for lesson pronunciation exercises.
+ *
+ * Each expected word is looked for, in order, among the words the recogniser
+ * heard, and gets one of three states:
+ *
+ *   good     heard as that word, and (where the recogniser reports it) with
+ *            confidence ≥ CONFIDENT
+ *   unclear  heard as something close to it, or as it but with low confidence
+ *   missed   nothing in the transcript matches it
+ *
+ * That is what the UI highlights. It is word-level on purpose: no API scores
+ * individual sounds in a Kenyan language (Azure's phoneme-level assessment has
+ * no Kenyan locale), so claiming to know which sound slipped would be invented.
+ */
+
+export type WordStatus = "good" | "unclear" | "missed";
+export type Verdict = "excellent" | "almost" | "practice";
+
+export type WordAssessment = {
+  expected: string;
+  status: WordStatus;
+  /** The word the recogniser heard in its place, when different. */
+  heard?: string;
+  confidence?: number;
+};
+
+export type PronunciationAssessment = {
+  score: number;
+  verdict: Verdict;
+  transcript: string;
+  words: WordAssessment[];
+};
+
+const CONFIDENT = 0.7;
+const MATCH = 80;
+const NEAR = 50;
+/** How far ahead of the last match to look, so one inserted word doesn't derail the rest. */
+const LOOKAHEAD = 3;
+
+export const VERDICT_EXCELLENT = 85;
+export const VERDICT_ALMOST = 60;
+
+export function assessPronunciation(
+  target: string,
+  recognized: { transcript: string; words?: { word: string; confidence?: number }[] },
+): PronunciationAssessment {
+  // Matched without diacritics (recognisers drop them inconsistently), but
+  // reported as written: "maĩ", not "mai" — in Gikuyu the tilde is the lesson.
+  const written = target
+    .split(/\s+/)
+    .map((word) => ({ shown: word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""), key: normalise(word) }))
+    .filter((word) => word.key);
+  const expected = written.map((word) => word.key);
+  // Prefer the recogniser's own word list (it carries confidence); fall back to
+  // splitting the transcript, which is all the browser recogniser gives.
+  const heard = (recognized.words?.length
+    ? recognized.words.map((w) => ({ word: normalise(w.word), confidence: w.confidence }))
+    : normalise(recognized.transcript).split(" ").map((word) => ({ word, confidence: undefined as number | undefined }))
+  ).filter((w) => w.word);
+
+  let cursor = 0;
+  const words: WordAssessment[] = expected.map((want, index) => {
+    const shown = written[index].shown;
+    let best = { index: -1, sim: 0 };
+    for (let i = cursor; i < Math.min(heard.length, cursor + LOOKAHEAD); i++) {
+      const sim = similarity(heard[i].word, want);
+      if (sim > best.sim) best = { index: i, sim };
+    }
+    if (best.index === -1 || best.sim < NEAR) return { expected: shown, status: "missed" };
+
+    cursor = best.index + 1;
+    const match = heard[best.index];
+    const confident = match.confidence === undefined || match.confidence >= CONFIDENT;
+    return {
+      expected: shown,
+      status: best.sim >= MATCH && confident ? "good" : "unclear",
+      heard: match.word !== want ? match.word : undefined,
+      confidence: match.confidence,
+    };
+  });
+
+  const points = words.reduce((sum, w) => sum + (w.status === "good" ? 1 : w.status === "unclear" ? 0.6 : 0), 0);
+  // Words said after the last match were never asked for. They cost a little,
+  // capped so a stray "um" doesn't sink an otherwise good attempt.
+  const penalty = Math.min((heard.length - cursor) * 5, 15);
+  const score = expected.length ? Math.max(0, Math.round((points / expected.length) * 100) - penalty) : 0;
+
+  return {
+    score,
+    verdict: score >= VERDICT_EXCELLENT ? "excellent" : score >= VERDICT_ALMOST ? "almost" : "practice",
+    transcript: recognized.transcript.trim(),
+    words,
+  };
+}

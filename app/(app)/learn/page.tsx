@@ -1,66 +1,59 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CharacterImage } from "@/components/assets/CharacterImage";
+import { LessonPath } from "@/components/lessons/LessonPath";
 import { characterFor } from "@/lib/assets";
 import { getLanguage } from "@/lib/db/languages";
-import { getCourse } from "@/lib/lessons/orientation";
+import { learnerPath } from "@/lib/lessons/progress";
 import { getSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Learn · Mizizi" };
 
-export default async function LearnPage() {
-  const session = await getSession();
+/** Levels rendered on first paint, either side of the learner's current one; the rest load on scroll. */
+const WINDOW = 20;
+
+export default async function LearnPage({ searchParams }: PageProps<"/learn">) {
+  const [{ completed }, session] = await Promise.all([searchParams, getSession()]);
   const language = session.languageId ? await getLanguage(session.languageId) : undefined;
-  const course = language ? getCourse(language.id) : [];
-  const nextIndex = course.findIndex((l) => !session.completedLessons.includes(l.id));
+  if (!language) {
+    return (
+      <p className="glass mx-auto max-w-md p-8 text-center text-muted">
+        Choose a language in your <Link href="/profile" className="font-medium text-accent hover:underline">profile</Link> to see your path.
+      </p>
+    );
+  }
+
+  const path = await learnerPath(session, language.id);
+  const from = Math.max(1, path.current - WINDOW);
+  const initial = path.levels.slice(from - 1, path.current + WINDOW);
+  const justCompleted = Number(completed);
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-8">
-      <header className="space-y-2">
-        <CharacterImage src={characterFor(language?.id)} name={`${language?.name ?? ""} character`} className="h-40" />
-        <h1 className="text-3xl font-semibold tracking-tight">{language?.name ?? "Your path"}</h1>
-        <p className="text-muted">
-          Orientation course. Full lessons arrive as verified {language?.name} content is added — data
-          coverage varies by language.
-        </p>
+    <div className="mx-auto w-full max-w-xl space-y-6">
+      <header className="glass flex items-center gap-4 p-5">
+        <CharacterImage src={characterFor(language.id)} name={`${language.name} character`} className="h-20 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{language.name}</h1>
+          <p className="text-sm text-muted">
+            Level {path.current} of {path.total} · {path.completedCount} completed
+          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--glass-inset-bg)]">
+            <div
+              className="h-full rounded-full bg-forest transition-[width] duration-300 ease-out"
+              style={{ width: `${(path.completedCount / Math.max(path.total, 1)) * 100}%` }}
+            />
+          </div>
+        </div>
       </header>
 
-      <ol className="space-y-3">
-        {course.map((lesson, i) => {
-          const done = session.completedLessons.includes(lesson.id);
-          const current = i === nextIndex;
-          const locked = !done && !current;
-          const body = (
-            <>
-              <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-semibold ${done ? "bg-forest text-white" : current ? "bg-accent-solid text-white" : "bg-border text-muted"}`}
-              >
-                {done ? "✓" : i + 1}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{lesson.title}</span>
-                <span className="block text-sm text-muted">{lesson.summary}</span>
-              </span>
-              {current && <span className="text-sm font-medium text-accent">Start</span>}
-              {done && <span className="text-sm text-muted">Review</span>}
-            </>
-          );
-          const frame = `flex items-center gap-4 rounded-2xl border-2 bg-surface p-4 ${current ? "border-accent" : "border-border"}`;
-          return (
-            <li key={lesson.id}>
-              {locked ? (
-                <div className={`${frame} opacity-60`} aria-disabled>
-                  {body}
-                </div>
-              ) : (
-                <Link href={lesson.slug === "speaking" ? "/learn/speak" : `/learn/${lesson.slug}`} className={`${frame} transition-colors duration-200 ease-out hover:border-accent`}>
-                  {body}
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <LessonPath
+        languageId={language.id}
+        total={path.total}
+        current={path.current}
+        from={from}
+        initial={initial}
+        justCompleted={Number.isInteger(justCompleted) && justCompleted > 0 ? justCompleted : null}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Link href="/practice" className="glass p-4 transition-colors duration-200 ease-out hover:border-accent">

@@ -10,6 +10,9 @@ export const ONBOARDING_STEPS = [
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
+/** Outside the step order, so a returning learner can reach it from any step. */
+export const SIGN_IN_PATH = "/onboarding/signin";
+
 /*
  * Local development escape hatch, defined here so the proxy and the route
  * handlers agree on it. Both conditions are required, and `next build` pins
@@ -51,13 +54,28 @@ export const NOTEBOOK_LIMIT = 40;
 /** Here rather than lib/db/notes so client components can import it. */
 export const NOTE_MAX_LENGTH = 500;
 
+/*
+ * A saved note, as handed back to the browser. Deliberately not lib/db/notes'
+ * `Note`: that module is "server-only" and carries the userId, which the
+ * client has no use for and should not be given.
+ */
+export type SavedNote = {
+  id: string;
+  text: string;
+  context?: string;
+  createdAt: string;
+};
+
 export const STREAK_MILESTONES = [7, 30, 100, 365];
 
 export type Session = {
   /** Date onboarding was completed (YYYY-MM-DD). */
   joinedAt?: string;
-  /** Anonymous id used to attribute contributions until real auth exists. */
+  /** Id that notes, contributions and the directory listing hang off. */
   userId?: string;
+  /** Set once an account exists; always equal to userId. Progress is then synced to it. */
+  accountId?: string;
+  /** Normalised phone number (+254…) or email the account was created with. */
   contact?: string;
   displayName: string;
   avatar: AvatarColor;

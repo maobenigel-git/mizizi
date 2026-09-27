@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { CharacterImage } from "@/components/assets/CharacterImage";
 import { onboardingButton } from "@/components/onboarding/styles";
 import { LOGO } from "@/lib/assets";
 import { startOnboarding } from "@/lib/session/actions";
+import { SIGN_IN_PATH } from "@/lib/session/types";
 
 export default function WelcomePage() {
   return (
@@ -22,9 +24,9 @@ export default function WelcomePage() {
         <button type="submit" className={onboardingButton}>
           Get started
         </button>
-        <button type="submit" className="w-full py-2 text-sm font-medium text-ocean">
+        <Link href={SIGN_IN_PATH} className="block w-full py-2 text-center text-sm font-medium text-ocean">
           I have an account
-        </button>
+        </Link>
       </form>
     </div>
   );
