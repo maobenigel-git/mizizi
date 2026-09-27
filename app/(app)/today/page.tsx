@@ -5,8 +5,9 @@ import { FlameIcon } from "@/components/shell/StreakFlame";
 import { WeekStrip } from "@/components/shell/WeekStrip";
 import { DailyGoal } from "@/components/today/DailyGoal";
 import { FeatureRail } from "@/components/today/FeatureRail";
+import { SpeakToMizizi, type DemoLanguage } from "@/components/today/SpeakToMizizi";
 import { WordOfDayCard } from "@/components/today/WordOfDayCard";
-import { wordOfDay } from "@/data/seed/word-of-day";
+import { seedWords, wordOfDay } from "@/data/seed/word-of-day";
 import { characterFor } from "@/lib/assets";
 import { getLanguage } from "@/lib/db/languages";
 import { learnerPath } from "@/lib/lessons/progress";
@@ -15,6 +16,33 @@ import { localDate, localHour } from "@/lib/session/streak";
 import { DAILY_LESSON_GOAL } from "@/lib/session/types";
 
 export const metadata: Metadata = { title: "Home · Mizizi" };
+
+/*
+ * Languages the browser can both hear and speak: Chrome/Edge recognise
+ * Kiswahili (sw-KE) and English. Kiswahili words come from the cited seed
+ * pool; the replies are plain Kiswahili ("Vizuri sana" very good, "Jaribu
+ * tena" try again, "Sema" say, "Nimesikia" I heard).
+ */
+const speakLanguages: DemoLanguage[] = [
+  {
+    id: "kiswahili",
+    name: "Kiswahili",
+    tag: "sw-KE",
+    words: seedWords.filter((w) => w.languageId === "kiswahili").map((w) => ({ text: w.term, meaning: w.meaning })),
+    say: { great: "Vizuri sana!", retry: "Jaribu tena", prompt: "Sema", heard: "Nimesikia" },
+  },
+  {
+    id: "english",
+    name: "English",
+    tag: "en-KE",
+    words: [
+      { text: "good morning", meaning: "a greeting" },
+      { text: "thank you", meaning: "showing thanks" },
+      { text: "my friend", meaning: "someone close to you" },
+    ],
+    say: { great: "Well done!", retry: "Not quite, try again", prompt: "Say", heard: "I heard" },
+  },
+];
 
 function greeting(hour: number) {
   if (hour < 12) return "Good morning";
@@ -62,6 +90,11 @@ export default async function TodayPage() {
             <p className="mt-1">You&apos;re set up to learn {language.name}. Start your first lesson, or explore anything below.</p>
           )}
         </header>
+
+        <SpeakToMizizi
+          languages={speakLanguages}
+          initial={speakLanguages.some((l) => l.id === session.languageId) ? session.languageId! : "kiswahili"}
+        />
 
         {suggestion && language && (
           <section className="relative flex min-h-72 flex-col justify-between gap-6 overflow-hidden rounded-[var(--radius-panel)] bg-[image:var(--hero-gradient)] p-6 text-[var(--on-hero)] shadow-[0_22px_44px_-20px_var(--red)] sm:p-7">

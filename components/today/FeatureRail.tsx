@@ -31,7 +31,7 @@ export function FeatureRail() {
       <h2 className="w-fit rounded-[var(--radius-control)] bg-background/85 px-3 py-1.5 text-lg font-semibold backdrop-blur-sm">
         Explore Mizizi
       </h2>
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-8 pt-6 sm:grid-cols-4 lg:grid-cols-1 lg:gap-y-10">
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-8 pt-6 sm:grid-cols-4 lg:grid-cols-1 lg:gap-y-8">
         {features.map((f) => {
           const Art = featureArt[f.id];
           const image = existsSync(path.join(artDir, `${f.id}.png`)) ? `/assets/features/${f.id}.png` : undefined;
@@ -39,7 +39,7 @@ export function FeatureRail() {
             <li key={f.id}>
               <Link
                 href={f.href}
-                className="press group relative flex min-h-28 flex-col justify-end gap-1 rounded-[var(--radius-panel)] border border-border bg-surface/90 p-4 pt-10 text-foreground shadow-[0_10px_24px_-18px_rgb(90_40_10/0.5)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-[0_16px_30px_-16px_var(--gold)]"
+                className="press group relative flex min-h-24 flex-col justify-end gap-0.5 rounded-[var(--radius-panel)] border border-border bg-surface/90 p-4 pt-8 text-foreground shadow-[0_10px_24px_-18px_rgb(90_40_10/0.5)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-[0_16px_30px_-16px_var(--gold)]"
               >
                 {/* The artwork leans out over the card's top edge. */}
                 <span className="pointer-events-none absolute -top-8 right-1 h-20 w-24 transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:rotate-[-3deg] lg:-top-9 lg:h-24 lg:w-28">
